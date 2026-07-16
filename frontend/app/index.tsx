@@ -20,6 +20,7 @@ type Mode = 'landing' | 'login' | 'register';
 export default function AuthScreen() {
   const router = useRouter();
   const { user, loading, setSession } = useAuth();
+const params = useLocalSearchParams();
   const [mode, setMode] = useState<Mode>('landing');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
