@@ -32,22 +32,24 @@ async function registerPush(user_id: string) {
 
 const TAB_ICONS: Record<string, string> = {
   home: 'home-variant',
+  rooms: 'pound-box',
   friends: 'account-multiple',
   messages: 'chat-processing',
-  rooms: 'pound-box',
+  notifications: 'bell',
   profile: 'account-circle',
 };
 
 const TAB_LABELS: Record<string, string> = {
   home: 'Home',
+  rooms: 'Rooms',
   friends: 'Friends',
   messages: 'Chats',
-  rooms: 'Rooms',
+  notifications: 'Alerts',
   profile: 'Me',
 };
 
 // enforce tab order
-const TAB_ORDER = ['home', 'friends', 'messages', 'rooms', 'profile'];
+const TAB_ORDER = ['home', 'rooms', 'friends', 'messages', 'notifications', 'profile'];
 
 export default function TabsLayout() {
   const t = useTheme();
@@ -65,6 +67,7 @@ export default function TabsLayout() {
 
   const styles = useMemo(() => makeStyles(t), [t]);
 
+  // slightly denser tab row for 6 items
   return (
     <Tabs
       screenOptions={{
@@ -111,9 +114,10 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="home" />
+      <Tabs.Screen name="rooms" />
       <Tabs.Screen name="friends" />
       <Tabs.Screen name="messages" />
-      <Tabs.Screen name="rooms" />
+      <Tabs.Screen name="notifications" />
       <Tabs.Screen name="profile" />
       <Tabs.Screen name="discover" options={{ href: null }} />
     </Tabs>
@@ -141,12 +145,12 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => StyleSheet.create({
   },
   tab: {
     flex: 1,
-    height: 46,
+    height: 44,
     borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 6,
+    gap: 4,
   },
   tabActive: {
     backgroundColor: t.colors.primaryGlow,
@@ -155,7 +159,7 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => StyleSheet.create({
   },
   tabLabel: {
     color: t.colors.primary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
 });

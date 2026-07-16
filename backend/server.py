@@ -86,6 +86,8 @@ class FriendActionBody(BaseModel):
 class MessageBody(BaseModel):
     text: Optional[str] = None
     image: Optional[str] = None  # base64
+    voice: Optional[str] = None
+    voice_duration: Optional[float] = None
     reply_to: Optional[str] = None
 
 
@@ -97,10 +99,31 @@ class RoomCreateBody(BaseModel):
     name: str
     description: Optional[str] = ""
     is_private: bool = False
+    password: Optional[str] = None
     icon: Optional[str] = None
     banner: Optional[str] = None
+    wallpaper: Optional[str] = None
+    wallpaper_blur: bool = False
     rules: Optional[str] = ""
     welcome_message: Optional[str] = ""
+    slow_mode_seconds: int = 0
+
+
+class RoomUpdateBody(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    rules: Optional[str] = None
+    welcome_message: Optional[str] = None
+    wallpaper: Optional[str] = None
+    wallpaper_blur: Optional[bool] = None
+    is_private: Optional[bool] = None
+    password: Optional[str] = None
+    slow_mode_seconds: Optional[int] = None
+    announcement: Optional[str] = None
+
+
+class RoomJoinBody(BaseModel):
+    password: Optional[str] = None
 
 
 class FeatureRoomBody(BaseModel):
@@ -111,6 +134,10 @@ class FeatureRoomBody(BaseModel):
 class RoomMessageBody(BaseModel):
     text: Optional[str] = None
     image: Optional[str] = None
+    voice: Optional[str] = None
+    voice_duration: Optional[float] = None
+    reply_to: Optional[str] = None
+    mentions: Optional[List[str]] = None
 
 
 class PostCreateBody(BaseModel):
@@ -157,6 +184,32 @@ class RegisterPushBody(BaseModel):
     user_id: str
     platform: str
     device_token: str
+
+
+class RoomModBody(BaseModel):
+    user_id: str
+    reason: Optional[str] = ""
+
+
+class RoomRoleBody(BaseModel):
+    user_id: str
+    role: str  # admin | moderator | member | vip
+
+
+class RoomAnnouncementBody(BaseModel):
+    text: Optional[str] = None
+
+
+class NotificationPrefsBody(BaseModel):
+    mentions: Optional[bool] = None
+    messages: Optional[bool] = None
+    friend_requests: Optional[bool] = None
+    room_events: Optional[bool] = None
+    announcements: Optional[bool] = None
+
+
+class ChangeUsernameBody(BaseModel):
+    username: str
 
 
 # ---------------- Auth helpers ----------------
@@ -727,14 +780,17 @@ async def get_chat_messages(other_id: str, user: dict = Depends(get_user_by_sess
 
 @api.post("/chats/{other_id}/messages")
 async def send_chat_message(other_id: str, body: MessageBody, user: dict = Depends(get_user_by_session)):
-    if not body.text and not body.image:
+    if not body.text and not body.image and not body.voice:
         raise HTTPException(400, "empty message")
     other = await db.users.find_one({"user_id": other_id}, {"_id": 0})
     if not other:
         raise HTTPException(404, "user not found")
-    # blocked?
     if await db.blocks.find_one({"blocker": other_id, "blocked": user["user_id"]}):
         raise HTTPException(403, "you have been blocked")
+    # Friend required for DM
+    a, b = sorted([user["user_id"], other_id])
+    if not await db.friendships.find_one({"a": a, "b": b}) and not user.get("is_developer"):
+        raise HTTPException(403, "friend required to send DM")
     key = _pair_key(user["user_id"], other_id)
     msg = {
         "message_id": new_id("m"),
@@ -743,15 +799,18 @@ async def send_chat_message(other_id: str, body: MessageBody, user: dict = Depen
         "to_id": other_id,
         "text": (body.text or "").strip()[:2000] or None,
         "image": body.image,
+        "voice": body.voice,
+        "voice_duration": min(30.0, float(body.voice_duration or 0)) if body.voice else None,
         "reply_to": body.reply_to,
         "reactions": {},
         "deleted_for": [],
         "deleted_for_all": False,
+        "read_by": [user["user_id"]],
         "edited_at": None,
         "created_at": now_utc(),
     }
     await db.messages.insert_one(msg)
-    await _push_notify([other_id], user.get("display_name") or user["username"], (body.text or "[image]")[:80])
+    await _push_notify([other_id], user.get("display_name") or user["username"], (body.text or "[media]")[:80], action_url=f"/chat/{user['user_id']}")
     await _add_notification(other_id, "message", f"New message from {user.get('display_name') or user['username']}", {"from_id": user["user_id"]})
     out = {**msg}
     out.pop("_id", None)
@@ -823,14 +882,21 @@ async def _next_room_code() -> str:
 async def create_room(body: RoomCreateBody, user: dict = Depends(get_user_by_session)):
     code = await _next_room_code()
     room_id = new_id("room")
+    pw_hash = None
+    if body.password:
+        pw_hash = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
     room = {
         "room_id": room_id,
         "room_code": code,
         "name": body.name.strip()[:60],
         "description": body.description.strip()[:400],
         "is_private": body.is_private,
+        "password_hash": pw_hash,
+        "has_password": bool(pw_hash),
         "icon": body.icon,
         "banner": body.banner,
+        "wallpaper": body.wallpaper,
+        "wallpaper_blur": body.wallpaper_blur,
         "rules": (body.rules or "").strip()[:1000],
         "welcome_message": (body.welcome_message or "").strip()[:400],
         "owner_id": user["user_id"],
@@ -838,6 +904,9 @@ async def create_room(body: RoomCreateBody, user: dict = Depends(get_user_by_ses
         "active_users": 0,
         "featured": False,
         "featured_at": None,
+        "pinned": False,
+        "hidden": False,
+        "slow_mode_seconds": max(0, min(300, body.slow_mode_seconds or 0)),
         "pinned_message_id": None,
         "announcement": None,
         "deleted": False,
@@ -849,28 +918,32 @@ async def create_room(body: RoomCreateBody, user: dict = Depends(get_user_by_ses
     })
     await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"rooms_created": 1}})
     room.pop("_id", None)
+    room.pop("password_hash", None)
     room["created_at"] = room["created_at"].isoformat()
     return {"room": room}
 
 
 def _serialize_room(r: dict) -> dict:
-    out = {k: v for k, v in r.items() if k != "_id"}
+    out = {k: v for k, v in r.items() if k not in ("_id", "password_hash")}
     if isinstance(out.get("created_at"), datetime):
         out["created_at"] = out["created_at"].isoformat()
+    if isinstance(out.get("featured_at"), datetime):
+        out["featured_at"] = out["featured_at"].isoformat()
     return out
 
 
 @api.get("/rooms")
 async def list_rooms(q: Optional[str] = None, user: dict = Depends(get_user_by_session)):
-    """Public room list. Featured first, then by member_count DESC, active_users DESC, created_at DESC."""
+    """Public + password-protected rooms. Sort: pinned → featured → active_users → member_count → recency."""
     query: dict = {"is_private": False, "deleted": {"$ne": True}}
-    if q:
+    if not q:
+        query["hidden"] = {"$ne": True}
+    else:
         regex = re.compile(re.escape(q.strip()), re.IGNORECASE)
         query["$or"] = [{"name": regex}, {"description": regex}, {"room_code": regex}]
 
-    # compute active_users on the fly: distinct authors who posted in the room in last 15min
     active_since = now_utc() - timedelta(minutes=15)
-    active_by_room: dict[str, int] = {}
+    active_by_room: dict = {}
     async for row in db.room_messages.aggregate([
         {"$match": {"created_at": {"$gte": active_since}}},
         {"$group": {"_id": "$room_id", "users": {"$addToSet": "$from_id"}}},
@@ -878,16 +951,16 @@ async def list_rooms(q: Optional[str] = None, user: dict = Depends(get_user_by_s
         active_by_room[row["_id"]] = len(row.get("users") or [])
 
     rooms = []
-    async for r in db.rooms.find(query, {"_id": 0}).limit(200):
+    async for r in db.rooms.find(query, {"_id": 0}).limit(300):
         r["active_users"] = active_by_room.get(r["room_id"], 0)
         rooms.append(r)
 
-    # sort: featured DESC, member_count DESC, active_users DESC, created_at DESC
     def _key(r: dict):
         return (
+            0 if r.get("pinned") else 1,
             0 if r.get("featured") else 1,
-            -int(r.get("member_count") or 0),
             -int(r.get("active_users") or 0),
+            -int(r.get("member_count") or 0),
             -(r.get("created_at").timestamp() if isinstance(r.get("created_at"), datetime) else 0),
         )
     rooms.sort(key=_key)
@@ -897,7 +970,15 @@ async def list_rooms(q: Optional[str] = None, user: dict = Depends(get_user_by_s
 @api.get("/rooms/featured")
 async def featured_rooms(user: dict = Depends(get_user_by_session)):
     rooms = []
-    async for r in db.rooms.find({"featured": True, "deleted": {"$ne": True}}, {"_id": 0}).sort("featured_at", -1).limit(20):
+    async for r in db.rooms.find({"featured": True, "deleted": {"$ne": True}, "hidden": {"$ne": True}}, {"_id": 0}).sort("featured_at", -1).limit(20):
+        rooms.append(_serialize_room(r))
+    return {"rooms": rooms}
+
+
+@api.get("/rooms/pinned")
+async def pinned_rooms(user: dict = Depends(get_user_by_session)):
+    rooms = []
+    async for r in db.rooms.find({"pinned": True, "deleted": {"$ne": True}}, {"_id": 0}).sort("pinned_at", -1).limit(20):
         rooms.append(_serialize_room(r))
     return {"rooms": rooms}
 
@@ -908,6 +989,19 @@ async def feature_room(body: FeatureRoomBody, user: dict = Depends(require_dev))
         {"room_id": body.room_id},
         {"$set": {"featured": body.featured, "featured_at": now_utc() if body.featured else None}},
     )
+    return {"ok": True}
+
+
+@api.post("/rooms/pin")
+async def pin_room(body: dict, user: dict = Depends(require_dev)):
+    pin = bool(body.get("pinned"))
+    await db.rooms.update_one({"room_id": body["room_id"]}, {"$set": {"pinned": pin, "pinned_at": now_utc() if pin else None}})
+    return {"ok": True}
+
+
+@api.post("/rooms/hide")
+async def hide_room(body: dict, user: dict = Depends(require_dev)):
+    await db.rooms.update_one({"room_id": body["room_id"]}, {"$set": {"hidden": bool(body.get("hidden"))}})
     return {"ok": True}
 
 
@@ -933,10 +1027,15 @@ async def get_room(room_id: str, user: dict = Depends(get_user_by_session)):
 
 
 @api.post("/rooms/{room_id}/join")
-async def join_room(room_id: str, user: dict = Depends(get_user_by_session)):
-    r = await db.rooms.find_one({"room_id": room_id}, {"_id": 0})
-    if not r:
+async def join_room(room_id: str, body: RoomJoinBody = None, user: dict = Depends(get_user_by_session)):
+    r = await db.rooms.find_one({"room_id": room_id})
+    if not r or r.get("deleted"):
         raise HTTPException(404, "room not found")
+    # password check
+    if r.get("password_hash"):
+        pw = (body.password if body else None) or ""
+        if not bcrypt.checkpw(pw.encode(), r["password_hash"].encode()):
+            raise HTTPException(403, "incorrect password")
     existing = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
     if existing:
         return {"ok": True, "already": True}
@@ -944,6 +1043,8 @@ async def join_room(room_id: str, user: dict = Depends(get_user_by_session)):
         "room_id": room_id, "user_id": user["user_id"], "role": "member", "muted": False, "joined_at": now_utc(),
     })
     await db.rooms.update_one({"room_id": room_id}, {"$inc": {"member_count": 1}})
+    # notify owner
+    await _add_notification(r["owner_id"], "room_join", f"{user.get('display_name') or user['username']} joined {r['name']}", {"room_id": room_id})
     return {"ok": True}
 
 
@@ -996,8 +1097,17 @@ async def send_room_message(room_id: str, body: RoomMessageBody, user: dict = De
         raise HTTPException(403, "not a member")
     if mem.get("muted"):
         raise HTTPException(403, "you are muted")
-    if not body.text and not body.image:
+    if not body.text and not body.image and not body.voice:
         raise HTTPException(400, "empty message")
+    # slow mode
+    room = await db.rooms.find_one({"room_id": room_id}, {"_id": 0})
+    slow = int(room.get("slow_mode_seconds") or 0) if room else 0
+    if slow > 0 and not user.get("is_developer") and mem["role"] not in ("owner", "admin", "moderator"):
+        last = await db.room_messages.find_one({"room_id": room_id, "from_id": user["user_id"]}, sort=[("created_at", -1)])
+        if last and last.get("created_at"):
+            elapsed = (now_utc() - last["created_at"].replace(tzinfo=timezone.utc) if last["created_at"].tzinfo is None else now_utc() - last["created_at"]).total_seconds()
+            if elapsed < slow:
+                raise HTTPException(429, f"slow mode — wait {int(slow - elapsed)}s")
     msg = {
         "message_id": new_id("rm"),
         "room_id": room_id,
@@ -1005,12 +1115,35 @@ async def send_room_message(room_id: str, body: RoomMessageBody, user: dict = De
         "from_username": user.get("username"),
         "from_display_name": user.get("display_name"),
         "from_avatar": user.get("avatar"),
+        "from_role": mem["role"],
+        "from_badges": user.get("badges", []),
         "text": (body.text or "").strip()[:2000] or None,
         "image": body.image,
+        "voice": body.voice,
+        "voice_duration": min(30.0, float(body.voice_duration or 0)) if body.voice else None,
+        "reply_to": body.reply_to,
+        "mentions": body.mentions or [],
         "reactions": {},
+        "deleted_for_all": False,
         "created_at": now_utc(),
     }
     await db.room_messages.insert_one(msg)
+    # mention notifications
+    for mid in (body.mentions or [])[:10]:
+        if mid == user["user_id"]:
+            continue
+        await _add_notification(
+            mid, "mention",
+            f"@{user.get('username')} mentioned you in {room.get('name') if room else 'a room'}",
+            {"room_id": room_id, "message_id": msg["message_id"]},
+        )
+    if body.mentions:
+        await _push_notify(
+            [m for m in body.mentions if m != user["user_id"]][:100],
+            f"Mention in {room.get('name', 'room') if room else 'room'}",
+            (body.text or "voice/image")[:80],
+            action_url=f"/room/{room_id}",
+        )
     out = {**msg}
     out.pop("_id", None)
     out["created_at"] = out["created_at"].isoformat()
@@ -1311,6 +1444,262 @@ async def dev_maintenance(body: dict, user: dict = Depends(require_dev)):
 async def dev_settings(user: dict = Depends(require_dev)):
     doc = await db.settings.find_one({"_id": "maintenance"}) or {}
     return {"maintenance": bool(doc.get("enabled"))}
+
+
+# ---------------- Read receipts, typing, room settings, mod, dev extras ----------------
+@api.post("/chats/{other_id}/read")
+async def mark_chat_read(other_id: str, user: dict = Depends(get_user_by_session)):
+    key = _pair_key(user["user_id"], other_id)
+    await db.messages.update_many(
+        {"pair_key": key, "to_id": user["user_id"]},
+        {"$addToSet": {"read_by": user["user_id"]}},
+    )
+    return {"ok": True}
+
+
+@api.post("/chats/{other_id}/typing")
+async def typing(other_id: str, user: dict = Depends(get_user_by_session)):
+    await db.typing.update_one(
+        {"from_id": user["user_id"], "to_id": other_id},
+        {"$set": {"at": now_utc()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api.get("/chats/{other_id}/typing")
+async def is_typing(other_id: str, user: dict = Depends(get_user_by_session)):
+    since = now_utc() - timedelta(seconds=6)
+    doc = await db.typing.find_one({"from_id": other_id, "to_id": user["user_id"], "at": {"$gte": since}})
+    return {"typing": bool(doc)}
+
+
+@api.post("/rooms/{room_id}/typing")
+async def room_typing(room_id: str, user: dict = Depends(get_user_by_session)):
+    await db.typing.update_one(
+        {"from_id": user["user_id"], "room_id": room_id},
+        {"$set": {"at": now_utc(), "username": user.get("username")}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api.get("/rooms/{room_id}/typing")
+async def room_typing_list(room_id: str, user: dict = Depends(get_user_by_session)):
+    since = now_utc() - timedelta(seconds=6)
+    usernames = []
+    async for doc in db.typing.find({"room_id": room_id, "at": {"$gte": since}, "from_id": {"$ne": user["user_id"]}}):
+        if doc.get("username"):
+            usernames.append(doc["username"])
+    return {"users": usernames[:5]}
+
+
+@api.post("/rooms/{room_id}/settings")
+async def update_room_settings(room_id: str, body: RoomUpdateBody, user: dict = Depends(get_user_by_session)):
+    r = await db.rooms.find_one({"room_id": room_id}, {"_id": 0})
+    if not r or r.get("deleted"):
+        raise HTTPException(404, "room not found")
+    mem = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
+    role = mem["role"] if mem else None
+    is_owner = role == "owner"
+    is_admin = role in ("owner", "admin") or user.get("is_developer")
+    if not is_admin:
+        raise HTTPException(403, "insufficient role")
+    updates: dict = {}
+    if body.name is not None: updates["name"] = body.name.strip()[:60]
+    if body.description is not None: updates["description"] = body.description.strip()[:400]
+    if body.rules is not None: updates["rules"] = body.rules.strip()[:1000]
+    if body.welcome_message is not None: updates["welcome_message"] = body.welcome_message.strip()[:400]
+    if body.wallpaper is not None: updates["wallpaper"] = body.wallpaper
+    if body.wallpaper_blur is not None: updates["wallpaper_blur"] = body.wallpaper_blur
+    if body.announcement is not None:
+        updates["announcement"] = body.announcement.strip()[:400] if body.announcement else None
+    if is_owner or user.get("is_developer"):
+        if body.is_private is not None: updates["is_private"] = body.is_private
+        if body.slow_mode_seconds is not None:
+            updates["slow_mode_seconds"] = max(0, min(300, body.slow_mode_seconds))
+        if body.password is not None:
+            if body.password:
+                updates["password_hash"] = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+                updates["has_password"] = True
+            else:
+                updates["password_hash"] = None
+                updates["has_password"] = False
+    if updates:
+        await db.rooms.update_one({"room_id": room_id}, {"$set": updates})
+    return {"ok": True}
+
+
+@api.post("/rooms/{room_id}/announcement")
+async def set_announcement(room_id: str, body: RoomAnnouncementBody, user: dict = Depends(get_user_by_session)):
+    mem = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
+    if (not mem or mem["role"] not in ("owner", "admin")) and not user.get("is_developer"):
+        raise HTTPException(403, "admin only")
+    r = await db.rooms.find_one({"room_id": room_id}, {"_id": 0})
+    text = (body.text or "").strip()[:400] or None
+    await db.rooms.update_one({"room_id": room_id}, {"$set": {"announcement": text}})
+    if text and r:
+        async for m in db.room_members.find({"room_id": room_id}, {"_id": 0, "user_id": 1}):
+            if m["user_id"] != user["user_id"]:
+                await _add_notification(m["user_id"], "announcement", text, {"room_id": room_id, "room_name": r.get("name")})
+    return {"ok": True}
+
+
+async def _log_mod(actor: str, action: str, meta: dict):
+    await db.mod_logs.insert_one({
+        "log_id": new_id("log"),
+        "actor": actor,
+        "action": action,
+        "meta": meta,
+        "at": now_utc(),
+    })
+
+
+@api.post("/rooms/{room_id}/ban")
+async def ban_from_room(room_id: str, body: RoomModBody, user: dict = Depends(get_user_by_session)):
+    my = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
+    if (not my or my["role"] not in ("owner", "admin")) and not user.get("is_developer"):
+        raise HTTPException(403, "admin only")
+    await db.room_members.delete_one({"room_id": room_id, "user_id": body.user_id})
+    await db.rooms.update_one({"room_id": room_id}, {"$inc": {"member_count": -1}})
+    await db.room_bans.update_one(
+        {"room_id": room_id, "user_id": body.user_id},
+        {"$set": {"reason": body.reason, "banned_by": user["user_id"], "at": now_utc()}},
+        upsert=True,
+    )
+    await _log_mod(user["user_id"], "room_ban", {"room_id": room_id, "target": body.user_id})
+    return {"ok": True}
+
+
+@api.post("/rooms/{room_id}/roles")
+async def set_room_role(room_id: str, body: RoomRoleBody, user: dict = Depends(get_user_by_session)):
+    r = await db.rooms.find_one({"room_id": room_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "not found")
+    if r["owner_id"] != user["user_id"] and not user.get("is_developer"):
+        raise HTTPException(403, "owner only")
+    if body.role not in ("admin", "moderator", "member", "vip", "verified"):
+        raise HTTPException(400, "invalid role")
+    await db.room_members.update_one({"room_id": room_id, "user_id": body.user_id}, {"$set": {"role": body.role}})
+    await _add_notification(body.user_id, "promotion", f"You are now {body.role} in {r['name']}", {"room_id": room_id})
+    return {"ok": True}
+
+
+@api.get("/blocks")
+async def list_blocks(user: dict = Depends(get_user_by_session)):
+    users = []
+    async for b in db.blocks.find({"blocker": user["user_id"]}, {"_id": 0}):
+        u = await db.users.find_one({"user_id": b["blocked"]}, {"_id": 0})
+        if u:
+            users.append(_sanitize_user(u))
+    return {"blocked": users}
+
+
+@api.get("/notifications/prefs")
+async def get_notif_prefs(user: dict = Depends(get_user_by_session)):
+    doc = await db.notification_prefs.find_one({"user_id": user["user_id"]}, {"_id": 0}) or {}
+    return {
+        "mentions": doc.get("mentions", True),
+        "messages": doc.get("messages", True),
+        "friend_requests": doc.get("friend_requests", True),
+        "room_events": doc.get("room_events", True),
+        "announcements": doc.get("announcements", True),
+    }
+
+
+@api.post("/notifications/prefs")
+async def set_notif_prefs(body: NotificationPrefsBody, user: dict = Depends(get_user_by_session)):
+    doc = {k: v for k, v in body.model_dump().items() if v is not None}
+    if doc:
+        await db.notification_prefs.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {**doc, "user_id": user["user_id"]}},
+            upsert=True,
+        )
+    return {"ok": True}
+
+
+@api.get("/notifications/unread-count")
+async def unread_count(user: dict = Depends(get_user_by_session)):
+    n = await db.notifications.count_documents({"user_id": user["user_id"], "read": False})
+    return {"count": n}
+
+
+@api.post("/users/change-username")
+async def change_username(body: ChangeUsernameBody, user: dict = Depends(get_user_by_session)):
+    uname = body.username.strip()
+    if not re.match(r"^[A-Za-z0-9_]{3,20}$", uname):
+        raise HTTPException(400, "invalid username")
+    if await db.users.find_one({"username": uname, "user_id": {"$ne": user["user_id"]}}):
+        raise HTTPException(409, "taken")
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"username": uname}})
+    return {"ok": True}
+
+
+@api.get("/dev/user/{user_id}")
+async def dev_user_detail(user_id: str, user: dict = Depends(require_dev)):
+    u = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not u:
+        raise HTTPException(404, "not found")
+    friends = await db.friendships.count_documents({"$or": [{"a": user_id}, {"b": user_id}]})
+    rooms = await db.rooms.count_documents({"owner_id": user_id, "deleted": {"$ne": True}})
+    posts = await db.posts.count_documents({"user_id": user_id})
+    messages = await db.messages.count_documents({"from_id": user_id}) + await db.room_messages.count_documents({"from_id": user_id})
+    sessions = []
+    async for s in db.user_sessions.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).limit(20):
+        sessions.append({
+            "created_at": s.get("created_at").isoformat() if isinstance(s.get("created_at"), datetime) else None,
+            "expires_at": s.get("expires_at").isoformat() if isinstance(s.get("expires_at"), datetime) else None,
+        })
+    return {"user": _sanitize_user(u), "friends": friends, "rooms": rooms, "posts": posts, "messages": messages, "sessions": sessions}
+
+
+@api.get("/dev/mod-logs")
+async def dev_mod_logs(user: dict = Depends(require_dev)):
+    items = []
+    async for l in db.mod_logs.find({}, {"_id": 0}).sort("at", -1).limit(100):
+        if isinstance(l.get("at"), datetime):
+            l["at"] = l["at"].isoformat()
+        items.append(l)
+    return {"logs": items}
+
+
+@api.get("/dev/deleted-messages")
+async def dev_deleted_messages(user: dict = Depends(require_dev)):
+    items = []
+    async for m in db.messages.find({"deleted_for_all": True}, {"_id": 0}).sort("created_at", -1).limit(50):
+        if isinstance(m.get("created_at"), datetime):
+            m["created_at"] = m["created_at"].isoformat()
+        items.append(m)
+    return {"messages": items}
+
+
+@api.post("/dev/delete-account")
+async def dev_delete_account(body: DevBanBody, user: dict = Depends(require_dev)):
+    await db.users.update_one({"user_id": body.user_id}, {"$set": {"banned": True, "deleted": True, "ban_reason": body.reason or "deleted by dev"}})
+    await _log_mod(user["user_id"], "delete_account", {"target": body.user_id})
+    return {"ok": True}
+
+
+@api.get("/dev/analytics")
+async def dev_analytics(user: dict = Depends(require_dev)):
+    day_ago = now_utc() - timedelta(days=1)
+    week_ago = now_utc() - timedelta(days=7)
+    return {
+        "total_users": await db.users.count_documents({}),
+        "banned_users": await db.users.count_documents({"banned": True}),
+        "new_users_24h": await db.users.count_documents({"created_at": {"$gte": day_ago}}),
+        "new_users_7d": await db.users.count_documents({"created_at": {"$gte": week_ago}}),
+        "total_rooms": await db.rooms.count_documents({"deleted": {"$ne": True}}),
+        "featured_rooms": await db.rooms.count_documents({"featured": True}),
+        "pinned_rooms": await db.rooms.count_documents({"pinned": True}),
+        "total_messages_24h": (
+            await db.messages.count_documents({"created_at": {"$gte": day_ago}})
+            + await db.room_messages.count_documents({"created_at": {"$gte": day_ago}})
+        ),
+        "posts_7d": await db.posts.count_documents({"created_at": {"$gte": week_ago}}),
+        "open_reports": await db.reports.count_documents({"status": "open"}),
+    }
 
 
 # ---------------- Push registration ----------------

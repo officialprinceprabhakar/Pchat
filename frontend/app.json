@@ -37,6 +37,7 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
+      "expo-audio",
       "expo-secure-store",
       [
         "expo-splash-screen",
@@ -46,7 +47,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#0A0A0C"
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

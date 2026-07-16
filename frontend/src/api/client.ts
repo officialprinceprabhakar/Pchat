@@ -75,11 +75,30 @@ export const api = {
   createRoom: (body: any) => apiFetch('/rooms', { method: 'POST', body }),
   listRooms: (q?: string) => apiFetch(`/rooms${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   featuredRooms: () => apiFetch('/rooms/featured'),
+  pinnedRooms: () => apiFetch('/rooms/pinned'),
   featureRoom: (room_id: string, featured: boolean) =>
     apiFetch('/rooms/feature', { method: 'POST', body: { room_id, featured } }),
+  pinRoom: (room_id: string, pinned: boolean) =>
+    apiFetch('/rooms/pin', { method: 'POST', body: { room_id, pinned } }),
+  hideRoom: (room_id: string, hidden: boolean) =>
+    apiFetch('/rooms/hide', { method: 'POST', body: { room_id, hidden } }),
+  updateRoomSettings: (room_id: string, body: any) =>
+    apiFetch(`/rooms/${room_id}/settings`, { method: 'POST', body }),
+  setAnnouncement: (room_id: string, text: string | null) =>
+    apiFetch(`/rooms/${room_id}/announcement`, { method: 'POST', body: { text } }),
+  banFromRoom: (room_id: string, user_id: string, reason?: string) =>
+    apiFetch(`/rooms/${room_id}/ban`, { method: 'POST', body: { user_id, reason } }),
+  setRoomRole: (room_id: string, user_id: string, role: string) =>
+    apiFetch(`/rooms/${room_id}/roles`, { method: 'POST', body: { user_id, role } }),
+  roomTyping: (room_id: string) => apiFetch(`/rooms/${room_id}/typing`, { method: 'POST' }),
+  roomTypingList: (room_id: string) => apiFetch(`/rooms/${room_id}/typing`),
+  chatTyping: (other_id: string) => apiFetch(`/chats/${other_id}/typing`, { method: 'POST' }),
+  chatIsTyping: (other_id: string) => apiFetch(`/chats/${other_id}/typing`),
+  markChatRead: (other_id: string) => apiFetch(`/chats/${other_id}/read`, { method: 'POST' }),
   myRooms: () => apiFetch('/rooms/my'),
   getRoom: (room_id: string) => apiFetch(`/rooms/${room_id}`),
-  joinRoom: (room_id: string) => apiFetch(`/rooms/${room_id}/join`, { method: 'POST' }),
+  joinRoom: (room_id: string, password?: string) =>
+    apiFetch(`/rooms/${room_id}/join`, { method: 'POST', body: password ? { password } : {} }),
   leaveRoom: (room_id: string) => apiFetch(`/rooms/${room_id}/leave`, { method: 'POST' }),
   roomMembers: (room_id: string) => apiFetch(`/rooms/${room_id}/members`),
   roomMessages: (room_id: string) => apiFetch(`/rooms/${room_id}/messages`),
@@ -102,6 +121,11 @@ export const api = {
   // Notifications
   notifications: () => apiFetch('/notifications'),
   markAllRead: () => apiFetch('/notifications/read-all', { method: 'POST' }),
+  unreadCount: () => apiFetch('/notifications/unread-count'),
+  getNotifPrefs: () => apiFetch('/notifications/prefs'),
+  setNotifPrefs: (body: any) => apiFetch('/notifications/prefs', { method: 'POST', body }),
+  listBlocks: () => apiFetch('/blocks'),
+  changeUsername: (username: string) => apiFetch('/users/change-username', { method: 'POST', body: { username } }),
   // Badges
   listBadges: () => apiFetch('/badges'),
   createBadge: (body: any) => apiFetch('/badges', { method: 'POST', body }),
@@ -112,7 +136,13 @@ export const api = {
   // Dev
   devStats: () => apiFetch('/dev/stats'),
   devUsers: (q: string = '') => apiFetch(`/dev/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  devUserDetail: (user_id: string) => apiFetch(`/dev/user/${user_id}`),
   devReports: () => apiFetch('/dev/reports'),
+  devModLogs: () => apiFetch('/dev/mod-logs'),
+  devDeletedMessages: () => apiFetch('/dev/deleted-messages'),
+  devDeleteAccount: (user_id: string, reason?: string) =>
+    apiFetch('/dev/delete-account', { method: 'POST', body: { user_id, reason } }),
+  devAnalytics: () => apiFetch('/dev/analytics'),
   devBan: (user_id: string, reason?: string) =>
     apiFetch('/dev/ban', { method: 'POST', body: { user_id, reason } }),
   devUnban: (user_id: string) =>

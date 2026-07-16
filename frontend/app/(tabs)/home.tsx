@@ -105,7 +105,7 @@ export default function HomeScreen() {
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
               testID="home-notif-btn"
-              onPress={() => router.push('/notifications')}
+              onPress={() => router.push('/(tabs)/notifications')}
               style={styles.iconBtn}
             >
               <MaterialCommunityIcons name="bell" size={20} color={t.colors.text} />

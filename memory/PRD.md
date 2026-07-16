@@ -1,53 +1,64 @@
-# PChat — Premium Social Chat App
+# PChat — Premium Social Chat App (Y99-inspired room experience)
 
-## Overview
-PChat is a premium Android-first social chat mobile application built with Expo (React Native) + FastAPI + MongoDB. Material 3 inspired dark theme, glassmorphic floating tab bar, red accent, staggered layout.
+## Stack
+Expo SDK 54 (React Native + expo-router) frontend, FastAPI + MongoDB backend. Emergent-managed Google Auth. Emergent push notifications wiring (deploy required to fire).
 
 ## Auth
-- **Google Sign-In** via Emergent-managed OAuth → auto grants `verified` badge.
-- **Guest Auth** — username + password (no phone), auto grants `guest` badge.
-- Developer usernames (`Prince_Prabhakar`, `PrincePrabhakar`, `Reyansh`) auto-seeded with `developer` badge and unrestricted access.
+- Google Sign-In (Emergent Auth) → auto-badge `verified` (Verified Gmail).
+- Guest username+password (no phone) → auto-badge `guest`.
+- Seeded developer accounts (`Prince_Prabhakar`, `PrincePrabhakar`, `Reyansh`) → auto-badge `developer` and unrestricted access.
 
-## Navigation (5-tab floating glassmorphic bar)
-- **Home** — welcome, user search, friends strip, trending rooms, latest posts.
-- **Messages** — 1:1 chat list + friends strip → chat screen.
-- **Rooms** — Discover/My rooms with cards + create button.
-- **Discover** — post feed with like/comment/share, camera icon to create.
-- **Profile** — cover, avatar, badges, stats, edit modal, sign-out, dev dashboard link (if dev).
+## Bottom navigation (6 tabs, floating glassmorphic)
+Home · Rooms · Friends · Messages · Notifications · Profile
 
-## 1-to-1 Chat (`/chat/[userId]`)
-- Message bubbles (primary color mine, surface2 others), image sharing (base64), typing indicator, online/last seen.
-- Long-press context menu: reactions (❤️😂👍😮😢🔥), reply, edit (own text messages), delete for me, delete for everyone.
+## Home
+Search rooms · Create-room CTA · **Featured Rooms** (horizontal, dev-pinnable) · **Trending Rooms**. Sort: `pinned → featured → active_users → member_count → recency`. Developer-hidden rooms stay searchable.
 
-## Rooms (`/room/[roomId]`)
-- Auto-generated room codes `pchat/roomid/00001+`, banner gradient, member count, private lock.
-- Tabs: CHAT / INFO / MEMBERS.
-- Info: description, rules, welcome message, announcement, leave/delete/report.
-- Members: list with role (owner/admin/moderator/member); moderators can kick.
+## Rooms (Y99-inspired, original UI)
+- Auto-incrementing room codes `pchat/roomid/00001+`.
+- Types: **Public / Private / Password-protected** (bcrypt hashed).
+- Roles: **Developer / Owner / Admin / Moderator / Verified / VIP / Member / Guest** — usernames rendered in role color.
+- Room chat features: **wallpaper support** (preset picker) + **blur toggle**, floating bubbles over wallpaper, small avatar beside every message, role-colored username above, badges inline, timestamp, smooth animations, **pinned announcement banner**, **date separators**, **typing indicator**, **scroll-to-newest** floating pill, online member count, message grouping.
+- Bottom input: emoji-ready textbox, image attach (base64), **voice notes ≤ 30 s** with waveform + play/pause, send button, animated record UI with cancel.
+- Long-press message: react (❤️😂👍😮😢🔥), reply, copy, mention, report, delete for everyone (permission-gated).
+- Tap username → mini profile sheet: open profile, mention, add friend, block; admins get kick/mute/promote/ban.
+- **`@` autocomplete** listing room members by role color; sent mentions produce instant notifications (Alerts tab → Mentions filter) that deep-link and highlight the target message.
+- Room admin: change wallpaper, toggle blur, set announcement, kick/mute/ban, promote to admin/moderator/VIP.
+- Developer only: pin, feature, hide, delete any room.
 
-## Posts (`/post/create`)
-- Photo + caption + public/friends visibility. Enforced **2 posts / week** at API level (429 if exceeded, developer bypass).
-- Likes, comments, delete own.
+## Private Chat
+Friend required to DM. Reply, delete for me / for everyone, image, voice notes (30s), read receipts (`read_by[]` on backend), typing indicator, online/last-seen.
 
-## Friends System
-- Send / accept / reject / cancel / remove. In-app + push notifications on each event.
+## Friends tab
+User search @username · Friends · Received / Sent requests · Suggested users · Online-now strip. Add/accept/reject/cancel/remove/block.
 
-## Badges (`/dev` badge tab for management)
-- Defaults: developer, verified, guest, moderator, vip, owner, elite, ai.
-- Developers can create custom badges (name, icon, color, description, enabled flag) and assign/remove per user.
+## Posts (Discover flow reachable via Post-composer route)
+Max 2 posts/week per user (429 on breach, developer bypass). Public / Friends-only. Like, comment, share. Developer can delete any post.
 
-## Developer Dashboard (`/dev`)
-- Sections: **Stats**, **Users** (search + ban/unban + badge assignment), **Reports**, **Badges** (create + list), **Broadcast** (title + message → all users push).
-- Toggle maintenance mode.
+## Notifications tab
+Categories: All / Unread / Mentions / Social. Types: friend_request, friend_accept, message, like, comment, mention, announcement, room_invite, room_join, room_leave, reply, promotion, badge_received, warning. Unread badge count via `/notifications/unread-count`. Tap mention → deep link into exact message with highlight animation.
 
-## Backend (FastAPI + MongoDB)
-- All routes prefixed `/api`. Auth via `Authorization: Bearer <session_token>`.
-- MongoDB collections: `users`, `user_sessions` (TTL), `friendships`, `friend_requests`, `messages`, `rooms`, `room_members`, `room_messages`, `posts`, `comments`, `notifications`, `badges`, `blocks`, `reports`, `settings`, `push_tokens`, `counters`.
-- Emergent Push relay wired via `EMERGENT_PUSH_KEY` (placeholder → real key on deploy).
+## Profile & Badges
+Profile banner gradient, avatar, bio, username, badges, friends/posts/rooms/joined date. Default badges: developer, verified, guest, moderator, vip, owner, elite, ai. Developers can create unlimited custom badges + assign/remove.
 
-## Not in MVP (documented for v2)
-- Voice notes (30s), announcement / pinned message UI, AI Welcome Bot chat commands, real-time WebSockets (currently 3s polling), typing indicator wire-up over sockets, image upload for room banner/icon, in-room search UI.
+## Developer Dashboard (hidden, unlocked from Profile crown icon)
+- Search any user + full profile detail (`/api/dev/user/{id}` with friends/rooms/posts/messages/sessions).
+- View reports, **moderation logs** (`/api/dev/mod-logs`), **deleted messages archive**, analytics (`/api/dev/analytics`: user/room/message counts, 24h/7d).
+- Ban / unban / **delete account** / **broadcast** (push to all).
+- Pin / feature / hide rooms · custom badges · assign roles.
+- Maintenance mode toggle.
 
-## Known Limitations
-- Preview environment uses HTTP polling (3s). WebSockets can be added in v2.
-- Push notifications only fire on real builds (not Expo Go).
+## Settings
+- **Theme** — Dark ↔ Light segmented control, persisted via AsyncStorage.
+- **Notifications** — per-category toggles (mentions, messages, friend_requests, room_events, announcements).
+- **Privacy** — blocked users list with unblock action.
+- **Account** — change username, language selector (6 languages listed; localisation deferred), sign out.
+
+## Safety
+Reports on user/room/message/post targets, block/unblock, rate limits via slow mode per room, developer moderation logs of ban/kick/mute actions.
+
+## Notes / Deferred
+- Chat polling every 3 s (WebSockets deferred).
+- Voice recording uses `expo-audio` (recorder + player); only fires on device build (Expo Go audio recording works on iOS/Android, web preview may be limited).
+- Push notifications require deploy + native build to fire on device.
+- Full multi-language content is UI-listed; string translations deferred.

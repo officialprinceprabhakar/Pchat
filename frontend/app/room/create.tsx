@@ -18,6 +18,8 @@ export default function CreateRoomScreen() {
   const [rules, setRules] = useState('');
   const [welcome, setWelcome] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [password, setPassword] = useState('');
+  const [slowMode, setSlowMode] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -32,6 +34,8 @@ export default function CreateRoomScreen() {
         rules,
         welcome_message: welcome,
         is_private: isPrivate,
+        password: password.trim() || undefined,
+        slow_mode_seconds: slowMode,
       });
       router.replace(`/room/${res.room.room_id}`);
     } catch (e: any) {
@@ -62,6 +66,35 @@ export default function CreateRoomScreen() {
               <View style={[styles.switchThumb, isPrivate && styles.switchThumbOn]} />
             </View>
           </TouchableOpacity>
+
+          <View>
+            <Text style={styles.label}>Password (optional)</Text>
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Leave empty for no password"
+              placeholderTextColor={theme.colors.textMuted}
+              secureTextEntry
+              style={styles.input}
+              testID="create-room-password"
+            />
+          </View>
+
+          <View>
+            <Text style={styles.label}>Slow mode (seconds between messages)</Text>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {[0, 5, 10, 30, 60].map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  onPress={() => setSlowMode(s)}
+                  style={[styles.slowChip, slowMode === s && styles.slowChipActive]}
+                  testID={`create-slow-${s}`}
+                >
+                  <Text style={[styles.slowTxt, slowMode === s && styles.slowTxtActive]}>{s === 0 ? 'Off' : s + 's'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
           {err ? <Text style={styles.err} testID="create-room-error">{err}</Text> : null}
           <View style={{ height: 10 }} />
@@ -109,4 +142,11 @@ const styles = StyleSheet.create({
   switchThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
   switchThumbOn: { alignSelf: 'flex-end' },
   err: { color: theme.colors.primary, fontSize: 13 },
+  slowChip: {
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 100,
+    backgroundColor: theme.colors.surface1, borderWidth: 1, borderColor: theme.colors.border,
+  },
+  slowChipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  slowTxt: { color: theme.colors.textDim, fontSize: 12, fontWeight: '700' },
+  slowTxtActive: { color: theme.colors.onPrimary },
 });
