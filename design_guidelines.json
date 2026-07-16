@@ -1,0 +1,218 @@
+{
+  "app_name": "PChat",
+  "theme": "Premium Dark Theme (Material 3 Inspired with E1 Anti-AI Design Principles)",
+  "typography": {
+    "headings": {
+      "fontFamily": "System",
+      "weights": {
+        "bold": "700",
+        "black": "900"
+      },
+      "sizes": {
+        "h1": "text-4xl",
+        "h2": "text-3xl",
+        "h3": "text-2xl",
+        "h4": "text-xl"
+      },
+      "tracking": "tracking-tight"
+    },
+    "body": {
+      "fontFamily": "System",
+      "sizes": {
+        "base": "text-base",
+        "sm": "text-sm",
+        "xs": "text-xs"
+      },
+      "leading": "leading-relaxed"
+    },
+    "labels": {
+      "uppercase": true,
+      "tracking": "tracking-widest",
+      "size": "text-xs"
+    }
+  },
+  "colors": {
+    "background": {
+      "base": "#0A0A0C",
+      "surface1": "#141418",
+      "surface2": "#1E1E24",
+      "surface3": "#2A2A32"
+    },
+    "text": {
+      "primary": "#F2F2F2",
+      "secondary": "#A1A1A8",
+      "disabled": "#52525A"
+    },
+    "primary": {
+      "base": "#FF3B30",
+      "glow": "rgba(255,59,48,0.3)",
+      "text_on_primary": "#FFFFFF"
+    },
+    "accent": {
+      "blue": "#0A84FF",
+      "green": "#30D158",
+      "yellow": "#FFD60A",
+      "cyan": "#32ADE6",
+      "orange": "#FF9F0A"
+    },
+    "badges": {
+      "developer": "#FF9F0A",
+      "verified": "#30D158",
+      "guest": "#8E8E93",
+      "moderator": "#0A84FF",
+      "vip": "#FFD60A",
+      "owner": "#FF453A",
+      "elite": "#BF5AF2",
+      "ai": "#32ADE6"
+    },
+    "borders": "#2C2C30"
+  },
+  "visual_enhancers": {
+    "glassmorphism": {
+      "background": "rgba(20, 20, 24, 0.75)",
+      "blur": "blur-xl",
+      "border": "border border-white/10"
+    },
+    "shadows": {
+      "glow": "shadow-[0_0_15px_rgba(255,59,48,0.2)]",
+      "ambient": "shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+    }
+  },
+  "layouts": {
+    "spacing": {
+      "xs": "4px",
+      "sm": "8px",
+      "md": "16px",
+      "lg": "24px",
+      "xl": "32px",
+      "2xl": "48px"
+    },
+    "radius": {
+      "sm": "8px",
+      "md": "12px",
+      "lg": "20px",
+      "full": "9999px"
+    },
+    "screens": {
+      "auth": "Centered card over abstract dark background. Glassmorphism panel. Minimalist inputs.",
+      "bottom_tabs": "Floating glassmorphism tab bar with active state glow, suspended 16px from the bottom edge.",
+      "chat": "Message bubbles with rounded corners (except corner adjacent to sender), subtle gradient for user, solid dark surface for others. Staggered entrance.",
+      "rooms": "Bento grid list of cards. Banners take up top 40% of card, gradient overlay to bottom dark. Explicit member count and active status.",
+      "room_detail": "Collapsing header with room banner, glassmorphic overlay for room title, tabbed navigation below.",
+      "discover": "Feed format, full-width or generous margins. Image aspect ratio 4:5 or 1:1. Emphasis on typography for captions.",
+      "profile": "Header with cover image, circular avatar overlapping, stats in a horizontal scroll row, badges displayed in a dense wrap grid."
+    }
+  },
+  "motion": {
+    "transitions": {
+      "default": "spring, stiffness 300, damping 30",
+      "fade": "timing, duration 200ms"
+    },
+    "interactions": {
+      "button_press": "Scale down to 0.95",
+      "list_item_appear": "Staggered fade in and slide up (15px)"
+    }
+  },
+  "components": [
+    {
+      "name": "FloatingTabBar",
+      "description": "Glassmorphic bottom tab bar, absolute positioned at bottom, slightly elevated from edges. Must have blur-xl and white/10 border.",
+      "usage": "Main navigation"
+    },
+    {
+      "name": "Badge",
+      "description": "Small pill with icon and text, matching badge colors. Text color must have high contrast against the badge background.",
+      "usage": "Profile, Room Members"
+    },
+    {
+      "name": "RoomCard",
+      "description": "Image background upper half, info lower half. Glassmorphic stats overlay on image.",
+      "usage": "Rooms screen"
+    },
+    {
+      "name": "MessageBubble",
+      "description": "Dynamic sizing, primary color for current user, surface2 for others.",
+      "usage": "1-to-1 Chat, Room Chat"
+    },
+    {
+      "name": "Avatar",
+      "description": "Circular image with optional online status indicator (green dot at bottom right) or inner border for VIPs.",
+      "usage": "Profile, Chat, Friends List"
+    }
+  ],
+  "image_urls": {
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1506863530036-1efeddceb993?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMHBob3RvJTIwYXZhdGFyfGVufDB8fHx8MTc4NDE5MDUzM3ww&ixlib=rb-4.1.0&q=85",
+        "description": "grayscale photo of woman wearing necklace and top",
+        "category": "avatars"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMHBob3RvJTIwYXZhdGFyfGVufDB8fHx8MTc4NDE5MDUzM3ww&ixlib=rb-4.1.0&q=85",
+        "description": "closeup photography of woman smiling",
+        "category": "avatars"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMHBob3RvJTIwYXZhdGFyfGVufDB8fHx8MTc4NDE5MDUzM3ww&ixlib=rb-4.1.0&q=85",
+        "description": "man wearing Henley top portrait",
+        "category": "avatars"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMHBob3RvJTIwYXZhdGFyfGVufDB8fHx8MTc4NDE5MDUzM3ww&ixlib=rb-4.1.0&q=85",
+        "description": "man in black button-up shirt",
+        "category": "avatars"
+      }
+    ],
+    "room_banners": [
+      {
+        "url": "https://images.unsplash.com/photo-1655841439659-0afc60676b70?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwxfHxkYXJrJTIwYWJzdHJhY3QlMjBwcmVtaXVtJTIwbGFuZHNjYXBlJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODQxOTA1MzN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "dark teal wavy shapes on black",
+        "category": "banners"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1709377058964-929af7f2d02f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHw0fHxkYXJrJTIwYWJzdHJhY3QlMjBwcmVtaXVtJTIwbGFuZHNjYXBlJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODQxOTA1MzN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "a black and white photo of wavy lines",
+        "category": "banners"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1651833826115-7530e72ce504?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwyfHxkYXJrJTIwYWJzdHJhY3QlMjBwcmVtaXVtJTIwbGFuZHNjYXBlJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODQxOTA1MzN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "dark curved ribbons abstract wallpaper",
+        "category": "banners"
+      }
+    ],
+    "post_images": [
+      {
+        "url": "https://images.unsplash.com/photo-1590347945111-a14c8efd9249?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwxfHxjeWJlcnB1bmslMjBuaWdodCUyMGNpdHklMjBzdHJlZXQlMjBwaG90b3xlbnwwfHx8fDE3ODIzNDcyNDB8MA&ixlib=rb-4.1.0&q=85",
+        "description": "red and white street light",
+        "category": "posts"
+      },
+      {
+        "url": "https://images.pexels.com/photos/17195067/pexels-photo-17195067.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Explore a vibrant urban alley illuminated by neon signs and lights, capturing the essence of nightlife.",
+        "category": "posts"
+      },
+      {
+        "url": "https://images.pexels.com/photos/20278554/pexels-photo-20278554.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Atmospheric view of a narrow Istanbul alley at night with neon lights and a moody vibe.",
+        "category": "posts"
+      }
+    ]
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy and varied surface lightness.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for floating bars, headers, and modals.",
+    "You MUST NOT apply universal transition. Always add transitions for specific interactive elements.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons. Use real SVG icons (e.g. lucide-react-native or @expo/vector-icons).",
+    "Every interaction needs micro-animations - press states (opacity/scale), transitions, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Main agent relies on provided image URLs. Missing categories = main agent will use placeholder text which is FORBIDDEN.",
+    "DO NOT use complete `transparent` background in header, overlays, any surface that has content under it. Example: Dropdown with transparent background.",
+    "Ensure minimum touch targets of 44x44 or 48x48 for all interactive elements on mobile.",
+    "All interactive and key informational elements MUST include a `data-testid` attribute to facilitate robust automated testing.",
+    "App is React Native Expo. Use StyleSheet or NativeWind/Tailwind. Follow standard mobile UI patterns but make them feel luxurious and custom."
+  ]
+}
