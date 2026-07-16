@@ -1023,7 +1023,46 @@ async def get_room(room_id: str, user: dict = Depends(get_user_by_session)):
     if not r or r.get("deleted"):
         raise HTTPException(404, "room not found")
     mem = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]}, {"_id": 0})
-    return {"room": _serialize_room(r), "membership": {"role": mem["role"] if mem else None, "muted": bool(mem and mem.get("muted"))}}
+    # Online members: distinct authors in last 15 min
+    active_since = now_utc() - timedelta(minutes=15)
+    active_ids = set()
+    async for row in db.room_messages.aggregate([
+        {"$match": {"room_id": room_id, "created_at": {"$gte": active_since}}},
+        {"$group": {"_id": "$from_id"}},
+    ]):
+        active_ids.add(row["_id"])
+    return {
+        "room": _serialize_room(r),
+        "membership": {"role": mem["role"] if mem else None, "muted": bool(mem and mem.get("muted"))},
+        "online_count": len(active_ids),
+    }
+
+
+class InviteBody(BaseModel):
+    user_id: str
+
+
+@api.post("/rooms/{room_id}/invite")
+async def invite_to_room(room_id: str, body: InviteBody, user: dict = Depends(get_user_by_session)):
+    r = await db.rooms.find_one({"room_id": room_id}, {"_id": 0})
+    if not r or r.get("deleted"):
+        raise HTTPException(404, "room not found")
+    # Sender must be a member
+    if not await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]}) and not user.get("is_developer"):
+        raise HTTPException(403, "join the room first")
+    await _add_notification(
+        body.user_id,
+        "room_invite",
+        f"{user.get('display_name') or user['username']} invited you to {r['name']}",
+        {"room_id": room_id, "room_name": r["name"], "from_id": user["user_id"]},
+    )
+    await _push_notify(
+        [body.user_id],
+        f"Room invite: {r['name']}",
+        f"{user.get('username')} invited you",
+        action_url=f"/room/{room_id}",
+    )
+    return {"ok": True}
 
 
 @api.post("/rooms/{room_id}/join")

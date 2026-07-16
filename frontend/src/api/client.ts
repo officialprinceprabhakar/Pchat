@@ -82,6 +82,8 @@ export const api = {
     apiFetch('/rooms/pin', { method: 'POST', body: { room_id, pinned } }),
   hideRoom: (room_id: string, hidden: boolean) =>
     apiFetch('/rooms/hide', { method: 'POST', body: { room_id, hidden } }),
+  inviteToRoom: (room_id: string, user_id: string) =>
+    apiFetch(`/rooms/${room_id}/invite`, { method: 'POST', body: { user_id } }),
   updateRoomSettings: (room_id: string, body: any) =>
     apiFetch(`/rooms/${room_id}/settings`, { method: 'POST', body }),
   setAnnouncement: (room_id: string, text: string | null) =>
