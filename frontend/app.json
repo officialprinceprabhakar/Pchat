@@ -1,24 +1,33 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "PChat",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "scheme": "pchat",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.modernsocialchat.cbyj0k"
+      "bundleIdentifier": "com.emergent.modernsocialchat.cbyj0k",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Share photos in chats and posts",
+        "NSCameraUsageDescription": "Take photos for your posts and profile",
+        "NSMicrophoneUsageDescription": "Record voice notes"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#0A0A0C"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.modernsocialchat.cbyj0k"
+      "package": "com.emergent.modernsocialchat.cbyj0k",
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -27,13 +36,15 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
+      "expo-secure-store",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#0A0A0C"
         }
       ]
     ],
