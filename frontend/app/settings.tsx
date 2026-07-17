@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -26,6 +26,10 @@ export default function SettingsScreen() {
   const [newUname, setNewUname] = useState('');
   const [unameErr, setUnameErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deletePwd, setDeletePwd] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -58,6 +62,45 @@ export default function SettingsScreen() {
       setShowUsername(false);
       setNewUname('');
     } catch (e: any) { setUnameErr(e.message || 'Failed'); }
+  };
+
+  const deactivate = () => {
+    Alert.alert(
+      'Deactivate account?',
+      'You will be signed out. You can reactivate anytime by logging in again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Deactivate',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deactivateAccount();
+              await logout();
+            } catch (e: any) {
+              Alert.alert('Failed', e?.message || 'Could not deactivate');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmDelete = async () => {
+    setDeleteErr(null);
+    if (user?.provider === 'guest' && deletePwd.length < 1) {
+      setDeleteErr('Enter your password to confirm');
+      return;
+    }
+    setDeleteBusy(true);
+    try {
+      await api.deleteMyAccount(user?.provider === 'guest' ? deletePwd : undefined);
+      await logout();
+    } catch (e: any) {
+      setDeleteErr(e?.message || 'Could not delete');
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   return (
@@ -115,12 +158,32 @@ export default function SettingsScreen() {
         </Section>
 
         {/* Privacy */}
-        <Section t={t} title="PRIVACY">
+        <Section t={t} title="PRIVACY & SAFETY">
+          <TouchableOpacity onPress={() => router.push('/privacy')} style={styles.card} testID="settings-privacy">
+            <View style={styles.rowLine}>
+              <MaterialCommunityIcons name="shield-lock" size={18} color={t.colors.text} />
+              <Text style={styles.rowLbl}>Privacy settings</Text>
+              <View style={{ flex: 1 }} />
+              <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => setShowBlocks(true)} style={styles.card} testID="settings-blocked">
             <View style={styles.rowLine}>
               <MaterialCommunityIcons name="block-helper" size={18} color={t.colors.text} />
               <Text style={styles.rowLbl}>Blocked users</Text>
               <View style={styles.countPill}><Text style={styles.countTxt}>{blocked.length}</Text></View>
+              <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
+            </View>
+          </TouchableOpacity>
+        </Section>
+
+        {/* Personalization */}
+        <Section t={t} title="PERSONALIZATION">
+          <TouchableOpacity onPress={() => router.push('/mood-badges')} style={styles.card} testID="settings-mood-badges">
+            <View style={styles.rowLine}>
+              <MaterialCommunityIcons name="emoticon-cool" size={18} color={t.colors.text} />
+              <Text style={styles.rowLbl}>Mood badges</Text>
+              <View style={{ flex: 1 }} />
               <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
             </View>
           </TouchableOpacity>
@@ -149,6 +212,26 @@ export default function SettingsScreen() {
             <Text style={[styles.rowLbl, { color: t.colors.primary }]}>Sign out</Text>
             <View style={{ flex: 1 }} />
             <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
+          </TouchableOpacity>
+        </Section>
+
+        {/* Danger zone */}
+        <Section t={t} title="DANGER ZONE">
+          <TouchableOpacity onPress={deactivate} style={styles.card} testID="settings-deactivate">
+            <View style={styles.rowLine}>
+              <MaterialCommunityIcons name="power-sleep" size={18} color={t.colors.orange} />
+              <Text style={[styles.rowLbl, { color: t.colors.orange }]}>Deactivate account</Text>
+              <View style={{ flex: 1 }} />
+              <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowDelete(true)} style={styles.card} testID="settings-delete-account">
+            <View style={styles.rowLine}>
+              <MaterialCommunityIcons name="delete-forever" size={18} color={t.colors.primary} />
+              <Text style={[styles.rowLbl, { color: t.colors.primary }]}>Permanently delete account</Text>
+              <View style={{ flex: 1 }} />
+              <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
+            </View>
           </TouchableOpacity>
         </Section>
 
@@ -242,6 +325,40 @@ export default function SettingsScreen() {
             {unameErr ? <Text style={{ color: t.colors.primary, fontSize: 12, marginTop: 4 }}>{unameErr}</Text> : null}
             <TouchableOpacity onPress={changeUname} style={styles.saveBtn} testID="settings-username-save">
               <Text style={styles.saveBtnTxt}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      {/* Delete account modal */}
+      <Modal visible={showDelete} animationType="slide" transparent onRequestClose={() => setShowDelete(false)}>
+        <View style={styles.sheetWrap}>
+          <View style={styles.sheet}>
+            <View style={styles.sheetHead}>
+              <Text style={styles.sheetTitle}>Permanently delete account</Text>
+              <TouchableOpacity onPress={() => setShowDelete(false)}><MaterialCommunityIcons name="close" size={22} color={t.colors.text} /></TouchableOpacity>
+            </View>
+            <Text style={{ color: t.colors.textDim, fontSize: 13, marginBottom: 12 }}>
+              This action is irreversible. Your profile, friends, and posts will be permanently removed. Your messages will remain visible but marked as sent by "Deleted user".
+            </Text>
+            {user?.provider === 'guest' ? (
+              <TextInput
+                value={deletePwd}
+                onChangeText={setDeletePwd}
+                placeholder="Enter your password to confirm"
+                placeholderTextColor={t.colors.textMuted}
+                secureTextEntry
+                style={styles.input}
+                testID="settings-delete-password"
+              />
+            ) : null}
+            {deleteErr ? <Text style={{ color: t.colors.primary, fontSize: 12, marginTop: 4 }}>{deleteErr}</Text> : null}
+            <TouchableOpacity
+              onPress={confirmDelete}
+              disabled={deleteBusy}
+              style={[styles.saveBtn, { backgroundColor: t.colors.primary }]}
+              testID="settings-delete-confirm"
+            >
+              <Text style={styles.saveBtnTxt}>{deleteBusy ? 'Deleting…' : 'Delete permanently'}</Text>
             </TouchableOpacity>
           </View>
         </View>

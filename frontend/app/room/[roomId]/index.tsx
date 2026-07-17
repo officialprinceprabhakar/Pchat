@@ -25,10 +25,23 @@ import { Avatar } from '@/src/components/Avatar';
 import { BadgePill } from '@/src/components/BadgePill';
 
 const ROLE_COLORS: Record<string, string> = {
-  developer: '#FF9F0A', owner: '#FF453A', admin: '#0A84FF', moderator: '#30D158',
-  verified: '#32ADE6', vip: '#FFD60A', member: '#F2F2F2', guest: '#A1A1A8',
+  developer: '#FF9F0A',       // orange-gold developer accent
+  owner: '#FFD60A',           // GOLD username
+  admin: '#FF453A',           // RED username
+  moderator: '#0A2E7A',       // DARK BLUE username
+  verified: '#32ADE6',
+  vip: '#FF9500',
+  member: '',                 // '' → use adaptive color based on wallpaper
+  guest: '',
 };
 const REACTIONS = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
+
+// Compute an adaptive username color that is readable on any wallpaper.
+// When wallpaper is present, we bias toward pure white with a subtle shadow.
+// When no wallpaper, we fall back to theme text color.
+function useAdaptiveMemberColor(hasWallpaper: boolean, themeText: string) {
+  return hasWallpaper ? '#FFFFFF' : themeText;
+}
 const WALLPAPER_PRESETS = [
   { key: 'none', label: 'Solid', color: '#0A0A0C' },
   { key: 'w1', label: 'Ember', url: 'https://images.unsplash.com/photo-1655841439659-0afc60676b70?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwxfHxkYXJrJTIwYWJzdHJhY3QlMjBwcmVtaXVtJTIwbGFuZHNjYXBlJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODQxOTA1MzN8MA&ixlib=rb-4.1.0&q=85' },
@@ -328,15 +341,15 @@ export default function RoomScreen() {
   const canAdmin = ['owner', 'admin'].includes(membership?.role || '') || user?.is_developer;
   const canChangeWallpaper = ['owner', 'admin', 'moderator'].includes(membership?.role || '') || user?.is_developer;
 
-  // Build compact message list w/ date separators + author grouping
+  // Build compact message list w/ date separators.
+  // NOTE (per user requirement): every message renders its own avatar/username/badge — no author grouping.
   const items: any[] = [];
-  let prevDate = ''; let prevAuthor = '';
+  let prevDate = '';
   messages.forEach((m) => {
     const d = dateLabel(m.created_at);
-    if (d !== prevDate) { items.push({ _type: 'sep', label: d, id: 'sep-' + m.message_id }); prevDate = d; prevAuthor = ''; }
-    m._showAuthor = prevAuthor !== m.from_id;
+    if (d !== prevDate) { items.push({ _type: 'sep', label: d, id: 'sep-' + m.message_id }); prevDate = d; }
+    m._showAuthor = true;
     items.push(m);
-    prevAuthor = m.from_id;
   });
 
   const wallpaper = room.wallpaper;
@@ -414,12 +427,22 @@ export default function RoomScreen() {
                       );
                     }
                     const isHighlighted = highlightId.current === item.message_id;
-                    const roleColor = ROLE_COLORS[item.from_role || 'member'] || t.colors.text;
+                    const rawRoleColor = ROLE_COLORS[item.from_role || 'member'];
+                    const hasWallpaper = !!wallpaper;
+                    const roleColor = rawRoleColor && rawRoleColor.length > 0
+                      ? rawRoleColor
+                      : (hasWallpaper ? '#FFFFFF' : t.colors.text);
+                    // For roles with dark blue color on dark themes, add subtle glow for visibility
+                    const nameShadow = hasWallpaper ? {
+                      textShadowColor: 'rgba(0,0,0,0.85)',
+                      textShadowOffset: { width: 0, height: 1 },
+                      textShadowRadius: 3,
+                    } : undefined;
                     return (
                       <Animated.View
                         style={[
                           s.msgWrap,
-                          item._showAuthor ? { marginTop: 8 } : { marginTop: 1 },
+                          { marginTop: 6 },
                           {
                             backgroundColor: highlightAnim.interpolate({
                               inputRange: [0, 1],
@@ -432,24 +455,22 @@ export default function RoomScreen() {
                         ]}
                       >
                         <Pressable onLongPress={() => setContextMsg(item)}>
-                          {item._showAuthor ? (
-                            <View style={s.authorLine}>
-                              <TouchableOpacity onPress={() => insertMentionAtCursor(item.from_username)} testID={`tap-user-${item.from_username}`}>
-                                <Avatar uri={item.from_avatar} name={item.from_display_name || item.from_username} size={22} />
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => insertMentionAtCursor(item.from_username)}
-                                onLongPress={() => setUserSheet({ user_id: item.from_id, username: item.from_username, avatar: item.from_avatar, display_name: item.from_display_name, role: item.from_role })}
-                                testID={`username-${item.from_username}`}
-                              >
-                                <Text style={[s.authorName, { color: roleColor }]}>@{item.from_username}</Text>
-                              </TouchableOpacity>
-                              {(item.from_badges || []).slice(0, 2).map((b: string) => (
-                                <BadgePill key={b} badge={b} mini />
-                              ))}
-                              <Text style={s.msgTime}>{timeShort(item.created_at)}</Text>
-                            </View>
-                          ) : null}
+                          <View style={s.authorLine}>
+                            <TouchableOpacity onPress={() => insertMentionAtCursor(item.from_username)} testID={`tap-user-${item.from_username}`}>
+                              <Avatar uri={item.from_avatar} name={item.from_display_name || item.from_username} size={22} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => insertMentionAtCursor(item.from_username)}
+                              onLongPress={() => setUserSheet({ user_id: item.from_id, username: item.from_username, avatar: item.from_avatar, display_name: item.from_display_name, role: item.from_role })}
+                              testID={`username-${item.from_username}`}
+                            >
+                              <Text style={[s.authorName, { color: roleColor }, nameShadow]}>@{item.from_username}</Text>
+                            </TouchableOpacity>
+                            {(item.from_badges || []).slice(0, 3).map((b: string) => (
+                              <BadgePill key={b} badge={b} mini />
+                            ))}
+                            <Text style={s.msgTime}>{timeShort(item.created_at)}</Text>
+                          </View>
                           {item.reply_to ? (
                             <View style={s.replyPreview}>
                               <MaterialCommunityIcons name="reply" size={10} color={t.colors.textDim} />

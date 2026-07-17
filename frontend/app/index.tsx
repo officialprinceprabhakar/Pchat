@@ -1,12 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView,
-  Platform, ScrollView, ActivityIndicator, Image,
+  Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -26,7 +24,6 @@ export default function AuthScreen() {
   const [displayName, setDisplayName] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -34,54 +31,6 @@ export default function AuthScreen() {
       else router.replace('/(tabs)/home');
     }
   }, [loading, user, router]);
-
-  const handleGoogle = useCallback(async () => {
-    setErr(null);
-    setGoogleBusy(true);
-    try {
-      const redirectUrl =
-        Platform.OS === 'web'
-          ? (typeof window !== 'undefined' ? window.location.origin + '/' : '')
-          : Linking.createURL('');
-      const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-      if (Platform.OS === 'web') {
-        (window as any).location.href = authUrl;
-        return;
-      }
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-      if (result.type !== 'success' || !result.url) {
-        setGoogleBusy(false);
-        return;
-      }
-      // parse session_id from hash or query
-      const u = result.url;
-      let session_id: string | null = null;
-      const hashIdx = u.indexOf('#');
-      if (hashIdx !== -1) {
-        const params = new URLSearchParams(u.substring(hashIdx + 1));
-        session_id = params.get('session_id');
-      }
-      if (!session_id) {
-        const qIdx = u.indexOf('?');
-        if (qIdx !== -1) {
-          const params = new URLSearchParams(u.substring(qIdx + 1));
-          session_id = params.get('session_id');
-        }
-      }
-      if (!session_id) {
-        setErr('Google sign-in returned no session');
-        setGoogleBusy(false);
-        return;
-      }
-      const res = await api.googleSession(session_id);
-      await setSession(res.session_token, res.user);
-      router.replace('/(tabs)/home');
-    } catch (e: any) {
-      setErr(e.message || 'Google sign-in failed');
-    } finally {
-      setGoogleBusy(false);
-    }
-  }, [router, setSession]);
 
   const handleGuest = useCallback(async () => {
     setErr(null);
@@ -140,43 +89,19 @@ export default function AuthScreen() {
 
             {mode === 'landing' ? (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>Sign in to continue</Text>
-                <Text style={styles.cardSub}>Choose how you want to enter PChat</Text>
-
-                <TouchableOpacity
-                  onPress={handleGoogle}
-                  disabled={googleBusy}
-                  activeOpacity={0.85}
-                  style={styles.googleBtn}
-                  testID="auth-google-btn"
-                >
-                  {googleBusy ? (
-                    <ActivityIndicator color="#000" />
-                  ) : (
-                    <>
-                      <View style={styles.gIcon}><Text style={{ color: '#1A73E8', fontWeight: '900', fontSize: 18 }}>G</Text></View>
-                      <Text style={styles.googleTxt}>Continue with Google</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerTxt}>OR</Text>
-                  <View style={styles.dividerLine} />
-                </View>
+                <Text style={styles.cardTitle}>Welcome to PChat</Text>
+                <Text style={styles.cardSub}>Sign in with your PChat account or create a new one.</Text>
 
                 <PButton
-                  title="Guest Login"
-                  variant="ghost"
+                  title="Login"
                   fullWidth
                   onPress={() => setMode('login')}
-                  icon={<MaterialCommunityIcons name="account-circle-outline" size={18} color={theme.colors.text} />}
+                  icon={<MaterialCommunityIcons name="login" size={18} color={theme.colors.onPrimary} />}
                   testID="auth-guest-login-btn"
                 />
-                <View style={{ height: 10 }} />
+                <View style={{ height: 12 }} />
                 <PButton
-                  title="Create Guest Account"
+                  title="New User"
                   variant="outline"
                   fullWidth
                   onPress={() => setMode('register')}
@@ -190,9 +115,9 @@ export default function AuthScreen() {
                   <MaterialCommunityIcons name="chevron-left" size={20} color={theme.colors.textDim} />
                   <Text style={styles.backTxt}>Back</Text>
                 </TouchableOpacity>
-                <Text style={styles.cardTitle}>{mode === 'register' ? 'Create guest account' : 'Guest login'}</Text>
+                <Text style={styles.cardTitle}>{mode === 'register' ? 'Create account' : 'Login'}</Text>
                 <Text style={styles.cardSub}>
-                  {mode === 'register' ? 'No phone number needed' : 'Enter your credentials'}
+                  {mode === 'register' ? 'Pick a username and password to get started.' : 'Enter your PChat credentials.'}
                 </Text>
 
                 {mode === 'register' ? (
@@ -276,15 +201,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: { color: theme.colors.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
   cardSub: { color: theme.colors.textDim, fontSize: 13, marginTop: 6, marginBottom: 20 },
-  googleBtn: {
-    backgroundColor: '#FFFFFF', borderRadius: theme.radii.full,
-    paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-  },
-  gIcon: { width: 22, height: 22, borderRadius: 4, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  googleTxt: { color: '#000', fontWeight: '700', fontSize: 15 },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 18, gap: 10 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  dividerTxt: { color: theme.colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   input: {
     backgroundColor: theme.colors.surface2, color: theme.colors.text,
     borderRadius: theme.radii.md, paddingHorizontal: 16, paddingVertical: 14,

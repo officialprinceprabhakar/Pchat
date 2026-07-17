@@ -174,6 +174,35 @@ export const api = {
     apiFetch(`/dev/user/${user_id}/logout-all`, { method: 'POST' }),
   devResetPassword: (user_id: string) =>
     apiFetch(`/dev/user/${user_id}/reset-password`, { method: 'POST' }),
+  // Privacy
+  getPrivacy: () => apiFetch('/users/me/privacy'),
+  updatePrivacy: (body: any) => apiFetch('/users/me/privacy', { method: 'PUT', body }),
+  // Mood badges
+  listMoodBadges: () => apiFetch('/mood-badges'),
+  toggleMoodBadge: (badge_id: string, enabled: boolean) =>
+    apiFetch('/mood-badges/toggle', { method: 'POST', body: { badge_id, enabled } }),
+  // Account actions
+  deactivateAccount: () => apiFetch('/users/me/deactivate', { method: 'POST' }),
+  reactivateAccount: () => apiFetch('/users/me/reactivate', { method: 'POST' }),
+  deleteMyAccount: (password?: string) =>
+    apiFetch('/users/me/delete', { method: 'POST', body: { password, confirm: true } }),
+  // Stories
+  createStory: (image: string, caption?: string) =>
+    apiFetch('/stories', { method: 'POST', body: { image, caption } }),
+  storyFeed: () => apiFetch('/stories/feed'),
+  viewStory: (story_id: string) =>
+    apiFetch(`/stories/${story_id}/view`, { method: 'POST' }),
+  storyViewers: (story_id: string) => apiFetch(`/stories/${story_id}/viewers`),
+  deleteStory: (story_id: string) =>
+    apiFetch(`/stories/${story_id}`, { method: 'DELETE' }),
+  // Enriched members list
+  roomMembersEnriched: (room_id: string) =>
+    apiFetch(`/rooms/${room_id}/members-enriched`),
+  // Extended room mod actions
+  roomUnban: (room_id: string, user_id: string, reason?: string) =>
+    apiFetch(`/rooms/${room_id}/unban`, { method: 'POST', body: { user_id, reason } }),
+  roomUnmute: (room_id: string, user_id: string) =>
+    apiFetch(`/rooms/${room_id}/unmute`, { method: 'POST', body: { user_id } }),
   // Push
   registerPush: (user_id: string, platform: string, device_token: string) =>
     apiFetch('/register-push', { method: 'POST', body: { user_id, platform, device_token }, auth: false }),

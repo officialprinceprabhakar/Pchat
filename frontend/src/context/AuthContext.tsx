@@ -15,6 +15,19 @@ export type PChatUser = {
   posts_count?: number;
   rooms_created?: number;
   badges?: string[];
+  mood_badges?: string[];
+  privacy?: {
+    account_visibility?: 'public' | 'private';
+    last_seen_visibility?: 'everyone' | 'friends' | 'nobody';
+    online_status_visibility?: 'everyone' | 'friends' | 'nobody';
+    active_status_visibility?: 'everyone' | 'friends' | 'nobody';
+    who_can_message?: 'everyone' | 'friends' | 'nobody';
+    who_can_friend_request?: 'everyone' | 'friends_of_friends' | 'nobody';
+    profile_visibility?: 'everyone' | 'friends' | 'nobody';
+    story_visibility?: 'everyone' | 'friends' | 'close_friends' | 'nobody';
+    message_requests?: boolean;
+  };
+  deactivated?: boolean;
   must_change_password?: boolean;
   banned?: boolean;
 };

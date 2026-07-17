@@ -79,6 +79,33 @@ class UpdateProfileBody(BaseModel):
     avatar: Optional[str] = None  # base64
 
 
+class PrivacySettingsBody(BaseModel):
+    account_visibility: Optional[str] = None  # 'public' | 'private'
+    last_seen_visibility: Optional[str] = None  # 'everyone' | 'friends' | 'nobody'
+    online_status_visibility: Optional[str] = None  # 'everyone' | 'friends' | 'nobody'
+    active_status_visibility: Optional[str] = None  # 'everyone' | 'friends' | 'nobody'
+    who_can_message: Optional[str] = None  # 'everyone' | 'friends' | 'nobody'
+    who_can_friend_request: Optional[str] = None  # 'everyone' | 'friends_of_friends' | 'nobody'
+    profile_visibility: Optional[str] = None  # 'everyone' | 'friends' | 'nobody'
+    story_visibility: Optional[str] = None  # 'everyone' | 'friends' | 'close_friends' | 'nobody'
+    message_requests: Optional[bool] = None
+
+
+class MoodBadgeBody(BaseModel):
+    badge_id: str  # e.g. "mood_cool"
+    enabled: bool
+
+
+class StoryCreateBody(BaseModel):
+    image: str  # base64 or data URL
+    caption: Optional[str] = ""
+
+
+class AccountActionBody(BaseModel):
+    password: Optional[str] = None
+    confirm: Optional[bool] = False
+
+
 class FriendActionBody(BaseModel):
     user_id: str
 
@@ -273,7 +300,35 @@ async def create_session(user_id: str) -> str:
     return token
 
 
+DEFAULT_PRIVACY = {
+    "account_visibility": "public",  # 'public' | 'private'
+    "last_seen_visibility": "everyone",
+    "online_status_visibility": "everyone",
+    "active_status_visibility": "everyone",
+    "who_can_message": "everyone",
+    "who_can_friend_request": "everyone",
+    "profile_visibility": "everyone",
+    "story_visibility": "everyone",
+    "message_requests": True,
+}
+
+MOOD_BADGES = [
+    {"badge_id": "mood_cool", "name": "Cool", "emoji": "😎", "color": "#0A84FF"},
+    {"badge_id": "mood_hot", "name": "Hot", "emoji": "🔥", "color": "#FF3B30"},
+    {"badge_id": "mood_king", "name": "King", "emoji": "👑", "color": "#FFD60A"},
+    {"badge_id": "mood_diamond", "name": "Diamond", "emoji": "💎", "color": "#5AC8FA"},
+    {"badge_id": "mood_nightowl", "name": "Night Owl", "emoji": "🌙", "color": "#5E5CE6"},
+    {"badge_id": "mood_energetic", "name": "Energetic", "emoji": "⚡", "color": "#FF9F0A"},
+    {"badge_id": "mood_music", "name": "Music Lover", "emoji": "🎵", "color": "#BF5AF2"},
+    {"badge_id": "mood_friendly", "name": "Friendly", "emoji": "❤️", "color": "#FF375F"},
+    {"badge_id": "mood_savage", "name": "Savage", "emoji": "😈", "color": "#8E44AD"},
+    {"badge_id": "mood_peaceful", "name": "Peaceful", "emoji": "🌸", "color": "#FF69B4"},
+]
+
+
 def _sanitize_user(u: dict) -> dict:
+    privacy = dict(DEFAULT_PRIVACY)
+    privacy.update(u.get("privacy") or {})
     return {
         "user_id": u["user_id"],
         "username": u.get("username"),
@@ -284,10 +339,13 @@ def _sanitize_user(u: dict) -> dict:
         "provider": u.get("provider"),
         "is_developer": bool(u.get("is_developer")),
         "banned": bool(u.get("banned")),
+        "deactivated": bool(u.get("deactivated")),
         "friends_count": u.get("friends_count", 0),
         "posts_count": u.get("posts_count", 0),
         "rooms_created": u.get("rooms_created", 0),
         "badges": u.get("badges", []),
+        "mood_badges": u.get("mood_badges", []),
+        "privacy": privacy,
         "last_seen": (u.get("last_seen").isoformat() if isinstance(u.get("last_seen"), datetime) else u.get("last_seen")),
         "created_at": (u.get("created_at").isoformat() if isinstance(u.get("created_at"), datetime) else u.get("created_at")),
         "must_change_password": bool(u.get("must_change_password")),
@@ -1210,25 +1268,28 @@ async def send_room_message(room_id: str, body: RoomMessageBody, user: dict = De
 
 @api.post("/rooms/{room_id}/kick")
 async def kick_member(room_id: str, body: FriendActionBody, user: dict = Depends(get_user_by_session)):
-    my = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
-    if not my or my["role"] not in ("owner", "admin", "moderator"):
-        raise HTTPException(403, "insufficient role")
-    target = await db.room_members.find_one({"room_id": room_id, "user_id": body.user_id})
-    if not target:
+    my_role, target_user, target_member = await _check_room_mod_action(room_id, user, body.user_id, allow_roles=("owner", "admin", "moderator"))
+    if not target_member:
         raise HTTPException(404, "not a member")
-    if target["role"] == "owner":
-        raise HTTPException(403, "cannot kick owner")
     await db.room_members.delete_one({"room_id": room_id, "user_id": body.user_id})
     await db.rooms.update_one({"room_id": room_id}, {"$inc": {"member_count": -1}})
+    await _log_mod(user["user_id"], "room_kick", {"room_id": room_id, "target": body.user_id})
     return {"ok": True}
 
 
 @api.post("/rooms/{room_id}/mute")
 async def mute_member(room_id: str, body: FriendActionBody, user: dict = Depends(get_user_by_session)):
-    my = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
-    if not my or my["role"] not in ("owner", "admin", "moderator"):
-        raise HTTPException(403, "insufficient role")
+    await _check_room_mod_action(room_id, user, body.user_id, allow_roles=("owner", "admin", "moderator"))
     await db.room_members.update_one({"room_id": room_id, "user_id": body.user_id}, {"$set": {"muted": True}})
+    await _log_mod(user["user_id"], "room_mute", {"room_id": room_id, "target": body.user_id})
+    return {"ok": True}
+
+
+@api.post("/rooms/{room_id}/unmute")
+async def unmute_member(room_id: str, body: FriendActionBody, user: dict = Depends(get_user_by_session)):
+    await _check_room_mod_action(room_id, user, body.user_id, allow_roles=("owner", "admin", "moderator"))
+    await db.room_members.update_one({"room_id": room_id, "user_id": body.user_id}, {"$set": {"muted": False}})
+    await _log_mod(user["user_id"], "room_unmute", {"room_id": room_id, "target": body.user_id})
     return {"ok": True}
 
 
@@ -1239,9 +1300,44 @@ async def promote(room_id: str, body: dict, user: dict = Depends(get_user_by_ses
     if role not in ("admin", "moderator", "member"):
         raise HTTPException(400, "invalid role")
     r = await db.rooms.find_one({"room_id": room_id}, {"_id": 0})
-    if not r or r["owner_id"] != user["user_id"]:
-        raise HTTPException(403, "owner only")
+    if not r:
+        raise HTTPException(404, "room not found")
+    target_user = await db.users.find_one({"user_id": target_id}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(404, "target user not found")
+    # Developer immunity
+    if target_user.get("is_developer") and not user.get("is_developer"):
+        raise HTTPException(403, "Developer accounts are protected")
+
+    # Developer bypass
+    if user.get("is_developer"):
+        await db.room_members.update_one({"room_id": room_id, "user_id": target_id}, {"$set": {"role": role}})
+        await _log_mod(user["user_id"], "room_role", {"room_id": room_id, "target": target_id, "new_role": role})
+        return {"ok": True}
+
+    my = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
+    if not my:
+        raise HTTPException(403, "not a room member")
+    my_role = my.get("role")
+    target_member = await db.room_members.find_one({"room_id": room_id, "user_id": target_id})
+    target_role = (target_member or {}).get("role")
+
+    # Owner: full permission across admin/moderator/member (cannot promote to owner)
+    if my_role == "owner":
+        pass
+    # Admin: can only promote/demote moderator ↔ member; cannot touch admin or owner
+    elif my_role == "admin":
+        if role == "admin":
+            raise HTTPException(403, "admin cannot promote to admin")
+        if target_role in ("owner", "admin"):
+            raise HTTPException(403, "admin cannot demote another admin or owner")
+        if role not in ("moderator", "member"):
+            raise HTTPException(403, "admin can only set moderator or member")
+    else:
+        raise HTTPException(403, "insufficient role")
+
     await db.room_members.update_one({"room_id": room_id, "user_id": target_id}, {"$set": {"role": role}})
+    await _log_mod(user["user_id"], "room_role", {"room_id": room_id, "target": target_id, "new_role": role})
     return {"ok": True}
 
 
@@ -1261,6 +1357,9 @@ async def delete_room(room_id: str, user: dict = Depends(get_user_by_session)):
 async def create_post(body: PostCreateBody, user: dict = Depends(get_user_by_session)):
     if body.visibility not in ("public", "friends"):
         raise HTTPException(400, "invalid visibility")
+    # 500 KB max (base64 length ~ 1.37 x binary size, so 500*1024 binary → 700_000 chars)
+    if body.image and len(body.image) > 700_000:
+        raise HTTPException(413, "Image too large (max 500 KB)")
     # 2 posts per week
     week_ago = now_utc() - timedelta(days=7)
     count = await db.posts.count_documents({"user_id": user["user_id"], "created_at": {"$gte": week_ago}})
@@ -1613,11 +1712,51 @@ async def _log_mod(actor: str, action: str, meta: dict):
     })
 
 
+async def _check_room_mod_action(room_id: str, actor: dict, target_id: str, allow_roles=("owner", "admin", "moderator")):
+    """Enforces PChat room role permission matrix.
+    - Developers can act on anyone (except other developers, only devs can act on devs).
+    - Owner/Admin/Moderator can act on regular members but never on developers or owner.
+    - Admin cannot demote/kick another Admin (except demoting themselves is disallowed here).
+    Returns (my_role, target_user, target_member) on success or raises HTTPException.
+    """
+    my = await db.room_members.find_one({"room_id": room_id, "user_id": actor["user_id"]})
+    target_user = await db.users.find_one({"user_id": target_id}, {"_id": 0})
+    target_member = await db.room_members.find_one({"room_id": room_id, "user_id": target_id})
+
+    if not target_user:
+        raise HTTPException(404, "target user not found")
+
+    # Developer target immunity — only other developers can act on developers.
+    if target_user.get("is_developer") and not actor.get("is_developer"):
+        raise HTTPException(403, "Developer accounts are protected")
+
+    if actor.get("is_developer"):
+        return (my["role"] if my else "developer"), target_user, target_member
+
+    if not my:
+        raise HTTPException(403, "not a room member")
+
+    if my["role"] not in allow_roles:
+        raise HTTPException(403, "insufficient role")
+
+    # Owner is untouchable except by another developer or themselves
+    if target_member and target_member.get("role") == "owner" and actor["user_id"] != target_id:
+        raise HTTPException(403, "cannot act on room owner")
+
+    # Admin cannot moderate another admin
+    if my["role"] == "admin" and target_member and target_member.get("role") == "admin" and actor["user_id"] != target_id:
+        raise HTTPException(403, "admin cannot moderate another admin")
+
+    # Moderator cannot moderate admin/owner/other mods
+    if my["role"] == "moderator" and target_member and target_member.get("role") in ("owner", "admin"):
+        raise HTTPException(403, "moderator cannot moderate this role")
+
+    return my["role"], target_user, target_member
+
+
 @api.post("/rooms/{room_id}/ban")
 async def ban_from_room(room_id: str, body: RoomModBody, user: dict = Depends(get_user_by_session)):
-    my = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
-    if (not my or my["role"] not in ("owner", "admin")) and not user.get("is_developer"):
-        raise HTTPException(403, "admin only")
+    my_role, target_user, target_member = await _check_room_mod_action(room_id, user, body.user_id, allow_roles=("owner", "admin", "moderator"))
     await db.room_members.delete_one({"room_id": room_id, "user_id": body.user_id})
     await db.rooms.update_one({"room_id": room_id}, {"$inc": {"member_count": -1}})
     await db.room_bans.update_one(
@@ -1629,15 +1768,40 @@ async def ban_from_room(room_id: str, body: RoomModBody, user: dict = Depends(ge
     return {"ok": True}
 
 
+@api.post("/rooms/{room_id}/unban")
+async def unban_from_room(room_id: str, body: RoomModBody, user: dict = Depends(get_user_by_session)):
+    await _check_room_mod_action(room_id, user, body.user_id, allow_roles=("owner", "admin", "moderator"))
+    await db.room_bans.delete_one({"room_id": room_id, "user_id": body.user_id})
+    await _log_mod(user["user_id"], "room_unban", {"room_id": room_id, "target": body.user_id})
+    return {"ok": True}
+
+
 @api.post("/rooms/{room_id}/roles")
 async def set_room_role(room_id: str, body: RoomRoleBody, user: dict = Depends(get_user_by_session)):
     r = await db.rooms.find_one({"room_id": room_id}, {"_id": 0})
     if not r:
         raise HTTPException(404, "not found")
-    if r["owner_id"] != user["user_id"] and not user.get("is_developer"):
-        raise HTTPException(403, "owner only")
     if body.role not in ("admin", "moderator", "member", "vip", "verified"):
         raise HTTPException(400, "invalid role")
+    target_user = await db.users.find_one({"user_id": body.user_id}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(404, "target user not found")
+    if target_user.get("is_developer") and not user.get("is_developer"):
+        raise HTTPException(403, "Developer accounts are protected")
+
+    if user.get("is_developer") or r["owner_id"] == user["user_id"]:
+        pass
+    else:
+        # Admin can only set moderator/member/vip/verified (not admin)
+        my = await db.room_members.find_one({"room_id": room_id, "user_id": user["user_id"]})
+        if not my or my["role"] != "admin":
+            raise HTTPException(403, "owner or admin only")
+        if body.role == "admin":
+            raise HTTPException(403, "admin cannot promote to admin")
+        target_member = await db.room_members.find_one({"room_id": room_id, "user_id": body.user_id})
+        if target_member and target_member.get("role") in ("owner", "admin"):
+            raise HTTPException(403, "admin cannot demote owner or another admin")
+
     await db.room_members.update_one({"room_id": room_id, "user_id": body.user_id}, {"$set": {"role": body.role}})
     await _add_notification(body.user_id, "promotion", f"You are now {body.role} in {r['name']}", {"room_id": room_id})
     return {"ok": True}
@@ -1944,6 +2108,310 @@ async def dev_reset_password(user_id: str, user: dict = Depends(require_dev)):
     await db.user_sessions.delete_many({"user_id": user_id})
     await _log_mod(user["user_id"], "reset_password", {"target": user_id})
     return {"ok": True, "temp_password": "PRin09#@"}
+
+
+# ---------------- Privacy Settings ----------------
+@api.get("/users/me/privacy")
+async def get_my_privacy(user: dict = Depends(get_user_by_session)):
+    priv = dict(DEFAULT_PRIVACY)
+    priv.update(user.get("privacy") or {})
+    return {"privacy": priv, "defaults": DEFAULT_PRIVACY}
+
+
+@api.put("/users/me/privacy")
+async def update_my_privacy(body: PrivacySettingsBody, user: dict = Depends(get_user_by_session)):
+    updates: dict = {}
+    payload = body.model_dump(exclude_unset=True)
+    ALLOWED_VIS = {"everyone", "friends", "nobody"}
+    ALLOWED_STORY = {"everyone", "friends", "close_friends", "nobody"}
+    ALLOWED_FRIEND = {"everyone", "friends_of_friends", "nobody"}
+    ALLOWED_ACCOUNT = {"public", "private"}
+    for k, v in payload.items():
+        if k == "account_visibility" and v not in ALLOWED_ACCOUNT:
+            raise HTTPException(400, f"invalid {k}")
+        if k in ("last_seen_visibility", "online_status_visibility", "active_status_visibility",
+                 "who_can_message", "profile_visibility") and v not in ALLOWED_VIS:
+            raise HTTPException(400, f"invalid {k}")
+        if k == "who_can_friend_request" and v not in ALLOWED_FRIEND:
+            raise HTTPException(400, f"invalid {k}")
+        if k == "story_visibility" and v not in ALLOWED_STORY:
+            raise HTTPException(400, f"invalid {k}")
+        if k == "message_requests" and not isinstance(v, bool):
+            raise HTTPException(400, f"invalid {k}")
+        updates[f"privacy.{k}"] = v
+    if updates:
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
+    updated = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    return {"user": _sanitize_user(updated)}
+
+
+# ---------------- Mood Badges ----------------
+@api.get("/mood-badges")
+async def list_mood_badges(user: dict = Depends(get_user_by_session)):
+    return {"catalog": MOOD_BADGES, "enabled": user.get("mood_badges", [])}
+
+
+@api.post("/mood-badges/toggle")
+async def toggle_mood_badge(body: MoodBadgeBody, user: dict = Depends(get_user_by_session)):
+    valid_ids = {b["badge_id"] for b in MOOD_BADGES}
+    if body.badge_id not in valid_ids:
+        raise HTTPException(400, "unknown mood badge")
+    current = set(user.get("mood_badges") or [])
+    if body.enabled:
+        current.add(body.badge_id)
+        if len(current) > 5:
+            raise HTTPException(400, "You can enable up to 5 mood badges")
+    else:
+        current.discard(body.badge_id)
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"mood_badges": list(current)}})
+    return {"mood_badges": list(current)}
+
+
+# ---------------- Account: Deactivate / Delete ----------------
+@api.post("/users/me/deactivate")
+async def deactivate_account(user: dict = Depends(get_user_by_session)):
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"deactivated": True, "deactivated_at": now_utc()}})
+    await db.user_sessions.delete_many({"user_id": user["user_id"]})
+    return {"ok": True}
+
+
+@api.post("/users/me/reactivate")
+async def reactivate_account(user: dict = Depends(get_user_by_session)):
+    # If they can call this with a valid session it means they logged back in (a fresh session)
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"deactivated": False}, "$unset": {"deactivated_at": ""}})
+    return {"ok": True}
+
+
+@api.post("/users/me/delete")
+async def delete_my_account(body: AccountActionBody, user: dict = Depends(get_user_by_session)):
+    if not body.confirm:
+        raise HTTPException(400, "Please confirm the deletion")
+    # For guest accounts, require password re-entry
+    if user.get("provider") == "guest":
+        if not body.password or not user.get("password_hash"):
+            raise HTTPException(400, "password required to delete guest account")
+        if not bcrypt.checkpw(body.password.encode(), user["password_hash"].encode()):
+            raise HTTPException(401, "password incorrect")
+    uid = user["user_id"]
+    # Anonymize but keep record for referential integrity of past messages
+    await db.users.update_one(
+        {"user_id": uid},
+        {
+            "$set": {
+                "deleted": True,
+                "deactivated": True,
+                "banned": False,
+                "display_name": "Deleted user",
+                "bio": "",
+                "avatar": None,
+                "email": None,
+                "password_hash": None,
+                "deleted_at": now_utc(),
+            }
+        },
+    )
+    await db.user_sessions.delete_many({"user_id": uid})
+    await db.push_tokens.delete_many({"user_id": uid})
+    # Remove friendships + friend requests
+    await db.friendships.delete_many({"$or": [{"a": uid}, {"b": uid}]})
+    await db.friend_requests.delete_many({"$or": [{"from_id": uid}, {"to_id": uid}]})
+    return {"ok": True}
+
+
+# ---------------- Stories (24h, image-only) ----------------
+STORY_TTL_HOURS = 24
+
+
+@api.post("/stories")
+async def create_story(body: StoryCreateBody, user: dict = Depends(get_user_by_session)):
+    if not body.image:
+        raise HTTPException(400, "image required")
+    if len(body.image) > 700_000:
+        raise HTTPException(413, "Story image too large (max 500 KB)")
+    sid = new_id("st")
+    doc = {
+        "story_id": sid,
+        "user_id": user["user_id"],
+        "username": user.get("username"),
+        "display_name": user.get("display_name"),
+        "avatar": user.get("avatar"),
+        "image": body.image,
+        "caption": (body.caption or "").strip()[:200],
+        "viewers": [],
+        "created_at": now_utc(),
+        "expires_at": now_utc() + timedelta(hours=STORY_TTL_HOURS),
+    }
+    await db.stories.insert_one(doc)
+    return {"story_id": sid}
+
+
+async def _story_can_view(story: dict, viewer_id: str) -> bool:
+    if story["user_id"] == viewer_id:
+        return True
+    owner = await db.users.find_one({"user_id": story["user_id"]}, {"_id": 0, "privacy": 1})
+    priv = dict(DEFAULT_PRIVACY)
+    priv.update((owner or {}).get("privacy") or {})
+    if priv["account_visibility"] == "private" or priv["story_visibility"] == "friends":
+        # only friends allowed
+        a, b = sorted([viewer_id, story["user_id"]])
+        friend = await db.friendships.find_one({"a": a, "b": b})
+        return bool(friend)
+    if priv["story_visibility"] == "nobody":
+        return False
+    return True
+
+
+@api.get("/stories/feed")
+async def stories_feed(user: dict = Depends(get_user_by_session)):
+    """Return active stories grouped by author for feed."""
+    now = now_utc()
+    # Determine my friends
+    uid = user["user_id"]
+    friend_ids: set = set()
+    async for f in db.friendships.find({"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}):
+        friend_ids.add(f["a"] if f["a"] != uid else f["b"])
+    # Fetch active stories
+    grouped: dict = {}
+    async for s in db.stories.find({"expires_at": {"$gt": now}}, {"_id": 0}).sort("created_at", 1):
+        # visibility check inline
+        if s["user_id"] != uid:
+            owner = await db.users.find_one({"user_id": s["user_id"]}, {"_id": 0, "privacy": 1})
+            priv = dict(DEFAULT_PRIVACY)
+            priv.update((owner or {}).get("privacy") or {})
+            if priv["story_visibility"] == "nobody":
+                continue
+            if priv["account_visibility"] == "private" or priv["story_visibility"] == "friends":
+                if s["user_id"] not in friend_ids:
+                    continue
+        s["created_at"] = s["created_at"].isoformat() if isinstance(s.get("created_at"), datetime) else s.get("created_at")
+        s["expires_at"] = s["expires_at"].isoformat() if isinstance(s.get("expires_at"), datetime) else s.get("expires_at")
+        s["viewed_by_me"] = uid in [v.get("user_id") for v in (s.get("viewers") or [])]
+        s["viewers_count"] = len(s.get("viewers") or [])
+        # drop viewer list for non-owner
+        if s["user_id"] != uid:
+            s.pop("viewers", None)
+        grouped.setdefault(s["user_id"], {"user_id": s["user_id"], "username": s.get("username"), "display_name": s.get("display_name"), "avatar": s.get("avatar"), "stories": []})
+        grouped[s["user_id"]]["stories"].append(s)
+    # sort so mine first
+    result = list(grouped.values())
+    result.sort(key=lambda g: (g["user_id"] != uid, g["stories"][0]["created_at"]))
+    return {"feed": result}
+
+
+@api.post("/stories/{story_id}/view")
+async def view_story(story_id: str, user: dict = Depends(get_user_by_session)):
+    s = await db.stories.find_one({"story_id": story_id}, {"_id": 0})
+    if not s:
+        raise HTTPException(404, "not found")
+    if s["expires_at"] <= now_utc():
+        raise HTTPException(410, "expired")
+    if not await _story_can_view(s, user["user_id"]):
+        raise HTTPException(403, "not allowed")
+    if s["user_id"] != user["user_id"]:
+        # dedupe by user_id
+        existing = any(v.get("user_id") == user["user_id"] for v in (s.get("viewers") or []))
+        if not existing:
+            await db.stories.update_one(
+                {"story_id": story_id},
+                {"$push": {"viewers": {
+                    "user_id": user["user_id"],
+                    "username": user.get("username"),
+                    "display_name": user.get("display_name"),
+                    "avatar": user.get("avatar"),
+                    "at": now_utc(),
+                }}},
+            )
+    return {"ok": True}
+
+
+@api.get("/stories/{story_id}/viewers")
+async def story_viewers(story_id: str, user: dict = Depends(get_user_by_session)):
+    s = await db.stories.find_one({"story_id": story_id}, {"_id": 0})
+    if not s:
+        raise HTTPException(404, "not found")
+    if s["user_id"] != user["user_id"] and not user.get("is_developer"):
+        raise HTTPException(403, "owner only")
+    viewers = []
+    for v in (s.get("viewers") or []):
+        at = v.get("at")
+        viewers.append({
+            "user_id": v.get("user_id"),
+            "username": v.get("username"),
+            "display_name": v.get("display_name"),
+            "avatar": v.get("avatar"),
+            "at": at.isoformat() if isinstance(at, datetime) else at,
+        })
+    return {"total": len(viewers), "viewers": viewers}
+
+
+@api.delete("/stories/{story_id}")
+async def delete_story(story_id: str, user: dict = Depends(get_user_by_session)):
+    s = await db.stories.find_one({"story_id": story_id}, {"_id": 0})
+    if not s:
+        raise HTTPException(404, "not found")
+    if s["user_id"] != user["user_id"] and not user.get("is_developer"):
+        raise HTTPException(403, "owner only")
+    await db.stories.delete_one({"story_id": story_id})
+    return {"ok": True}
+
+
+# ---------------- Members with online / last_seen enrichment ----------------
+@api.get("/rooms/{room_id}/members-enriched")
+async def room_members_enriched(room_id: str, user: dict = Depends(get_user_by_session)):
+    """Extended members endpoint with online + last_seen + privacy-aware last_seen."""
+    now = now_utc()
+    online_threshold = now - timedelta(minutes=2)
+    uid = user["user_id"]
+    # Preload viewer's friend ids for constant-time membership check
+    friend_ids: set = set()
+    async for f in db.friendships.find({"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}):
+        friend_ids.add(f["a"] if f["a"] != uid else f["b"])
+
+    def scope_allows(scope: str, target_uid: str) -> bool:
+        if scope == "nobody":
+            return False
+        if user.get("is_developer") or target_uid == uid:
+            return True
+        if scope == "everyone":
+            return True
+        if scope == "friends":
+            return target_uid in friend_ids
+        return True
+
+    members = []
+    async for m in db.room_members.find({"room_id": room_id}, {"_id": 0}).limit(500):
+        u = await db.users.find_one({"user_id": m["user_id"]}, {"_id": 0})
+        if not u or u.get("deactivated"):
+            continue
+        priv = dict(DEFAULT_PRIVACY)
+        priv.update(u.get("privacy") or {})
+        last_seen_dt = u.get("last_seen")
+        is_online = isinstance(last_seen_dt, datetime) and last_seen_dt >= online_threshold
+        show_online = scope_allows(priv["online_status_visibility"], u["user_id"])
+        show_last_seen = scope_allows(priv["last_seen_visibility"], u["user_id"])
+        members.append({
+            "user_id": u["user_id"],
+            "username": u.get("username"),
+            "display_name": u.get("display_name"),
+            "avatar": u.get("avatar"),
+            "badges": u.get("badges", []),
+            "mood_badges": u.get("mood_badges", []),
+            "is_developer": bool(u.get("is_developer")),
+            "role": m.get("role", "member"),
+            "muted": bool(m.get("muted")),
+            "is_online": bool(show_online and is_online),
+            "last_seen": (last_seen_dt.isoformat() if show_last_seen and isinstance(last_seen_dt, datetime) else None),
+        })
+    role_order = {"owner": 0, "admin": 1, "moderator": 2, "vip": 3, "verified": 4, "member": 5}
+    members.sort(key=lambda x: (role_order.get(x["role"], 6), not x["is_online"], (x["username"] or "").lower()))
+    return {"members": members}
+
+
+async def _are_friends(a_id: str, b_id: str) -> bool:
+    if a_id == b_id:
+        return True
+    a, b = sorted([a_id, b_id])
+    return bool(await db.friendships.find_one({"a": a, "b": b}))
 
 
 # ---------------- Mount router ----------------
