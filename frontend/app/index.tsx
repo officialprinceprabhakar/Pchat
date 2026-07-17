@@ -88,8 +88,8 @@ const params = useLocalSearchParams();
     setBusy(true);
     try {
       const res = mode === 'register'
-        ? await api.Register(username.trim(), password, displayName.trim() || undefined)
-        : await api.Login(username.trim(), password);
+        ? await api.guestRegister(username.trim(), password, displayName.trim() || undefined)
+        : await api.guestLogin(username.trim(), password);
       await setSession(res.session_token, res.user);
       router.replace('/(tabs)/home');
     } catch (e: any) {
@@ -221,10 +221,16 @@ const params = useLocalSearchParams();
                 <Text style={styles.errText} testID="auth-error">{err}</Text>
               </View>
             ) : null}
+<View style={styles.footer}>
+  <Text style={styles.footerTxt}>
+    By continuing, you agree to PChat community guidelines.
+  </Text>
 
-            <View style={styles.footer}>
-              <Text style={styles.footerTxt}>By continuing, you agree to PChat community guidelines.</Text>
-            </View>
+  <Text style={styles.devName}>
+    © 2026 • Prince Prabhakar
+  </Text>
+</View>
+            
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -278,5 +284,13 @@ const styles = StyleSheet.create({
   },
   errText: { color: theme.colors.text, fontSize: 13, flex: 1 },
   footer: { marginTop: 24, alignItems: 'center' },
-  footerTxt: { color: theme.colors.textMuted, fontSize: 11, textAlign: 'center' },
+  footerTxt: { color: theme.colors.textMuted, fontSize: 11, textAlign: 'center' }, 
+devName: {
+  marginTop: 12,
+  color: "#9CA3AF",
+  fontSize: 13,
+  fontWeight: "600",
+  textAlign: "center",
+  letterSpacing: 0.5,
+},
 });
