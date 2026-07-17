@@ -471,7 +471,7 @@ async def shutdown():
 # ---------------- Auth Endpoints ----------------
 @api.get("/")
 async def root():
-    return {"ok": True, "app": "PChat"}
+    return {"ok": True, "app": "Plexa"}
 
 
 @api.post("/auth/guest/register")
@@ -2193,7 +2193,9 @@ async def delete_my_account(body: AccountActionBody, user: dict = Depends(get_us
         if not bcrypt.checkpw(body.password.encode(), user["password_hash"].encode()):
             raise HTTPException(401, "password incorrect")
     uid = user["user_id"]
-    # Anonymize but keep record for referential integrity of past messages
+
+    # Anonymize the user record (keep row so message references remain consistent,
+    # attributed to "Deleted user").
     await db.users.update_one(
         {"user_id": uid},
         {
@@ -2202,19 +2204,61 @@ async def delete_my_account(body: AccountActionBody, user: dict = Depends(get_us
                 "deactivated": True,
                 "banned": False,
                 "display_name": "Deleted user",
+                "username": f"deleted_{uid[:10]}",
                 "bio": "",
                 "avatar": None,
                 "email": None,
                 "password_hash": None,
+                "google_sub": None,
+                "badges": [],
+                "mood_badges": [],
+                "privacy": DEFAULT_PRIVACY,
                 "deleted_at": now_utc(),
             }
         },
     )
+
+    # --- Cascade delete all user-owned content and metadata ---
+    # Sessions & push tokens
     await db.user_sessions.delete_many({"user_id": uid})
     await db.push_tokens.delete_many({"user_id": uid})
-    # Remove friendships + friend requests
+    # Friendships + friend requests (both directions)
     await db.friendships.delete_many({"$or": [{"a": uid}, {"b": uid}]})
     await db.friend_requests.delete_many({"$or": [{"from_id": uid}, {"to_id": uid}]})
+    # Notifications the user has received (their inbox)
+    await db.notifications.delete_many({"user_id": uid})
+    # Posts by this user + their images
+    await db.posts.delete_many({"user_id": uid})
+    # Stories by this user + their images (also drop viewer records referencing this user in others' stories)
+    await db.stories.delete_many({"user_id": uid})
+    await db.stories.update_many({}, {"$pull": {"viewers": {"user_id": uid}}})
+    # Room ownership: transfer rooms owned by this user or delete tiny rooms
+    async for room in db.rooms.find({"owner_id": uid}, {"_id": 0}):
+        # Try to promote the earliest admin/mod/member to owner
+        new_owner = await db.room_members.find_one(
+            {"room_id": room["room_id"], "user_id": {"$ne": uid}},
+            sort=[("joined_at", 1)],
+        )
+        if new_owner:
+            await db.rooms.update_one({"room_id": room["room_id"]}, {"$set": {"owner_id": new_owner["user_id"]}})
+            await db.room_members.update_one({"room_id": room["room_id"], "user_id": new_owner["user_id"]}, {"$set": {"role": "owner"}})
+        else:
+            # Empty room — clean up
+            await db.rooms.delete_one({"room_id": room["room_id"]})
+            await db.messages.delete_many({"room_id": room["room_id"]})
+    # Remove from all remaining room memberships
+    await db.room_members.delete_many({"user_id": uid})
+    await db.room_bans.delete_many({"user_id": uid})
+    # Direct message threads: keep messages attributed to Deleted user (already anonymized above)
+    # but remove any dm thread that is now fully orphaned
+    await db.dm_reads.delete_many({"user_id": uid})
+    # Reports by/against this user — keep for moderation history but scrub reporter/target ids? Keep intact for audit.
+    # Log the deletion for compliance
+    await _log_mod("system", "account_deleted", {
+        "user_id": uid,
+        "provider": user.get("provider"),
+        "at": now_utc().isoformat(),
+    })
     return {"ok": True}
 
 

@@ -1,20 +1,23 @@
 {
   "expo": {
-    "name": "PChat",
+    "name": "Plexa",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "pchat",
+    "scheme": "plexa",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "primaryColor": "#FF3B30",
+    "description": "Plexa is a premium social chat where you can join live public rooms, chat 1-on-1 with friends, share photo posts and 24-hour stories, and personalize your profile with badges — all in a modern, mobile-first experience.",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.modernsocialchat.cbyj0k",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Share photos in chats and posts",
+        "NSPhotoLibraryUsageDescription": "Share photos in chats, posts, and stories",
         "NSCameraUsageDescription": "Take photos for your posts and profile",
-        "NSMicrophoneUsageDescription": "Record voice notes"
+        "NSMicrophoneUsageDescription": "Record voice notes for chats"
       }
     },
     "android": {
@@ -24,11 +27,12 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.emergent.modernsocialchat.cbyj0k",
+      "versionCode": 1,
       "permissions": [
         "READ_MEDIA_IMAGES",
         "RECORD_AUDIO",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "POST_NOTIFICATIONS",
+        "INTERNET"
       ]
     },
     "web": {
@@ -49,8 +53,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#0A0A0C"
         }
-      ],
-      "expo-audio"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

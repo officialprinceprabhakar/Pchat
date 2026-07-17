@@ -83,14 +83,14 @@ export default function AuthScreen() {
               <View style={styles.logo}>
                 <MaterialCommunityIcons name="message-flash" size={38} color={theme.colors.onPrimary} />
               </View>
-              <Text style={styles.brand}>PChat</Text>
+              <Text style={styles.brand}>Plexa</Text>
               <Text style={styles.tagline}>Premium chat. Real conversations.</Text>
             </View>
 
             {mode === 'landing' ? (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>Welcome to PChat</Text>
-                <Text style={styles.cardSub}>Sign in with your PChat account or create a new one.</Text>
+                <Text style={styles.cardTitle}>Welcome to Plexa</Text>
+                <Text style={styles.cardSub}>Sign in with your Plexa account or create a new one.</Text>
 
                 <PButton
                   title="Login"
@@ -121,7 +121,7 @@ export default function AuthScreen() {
                 <Text style={styles.cardSub}>
                   {mode === 'register'
                     ? 'Pick a username and password to get started.'
-                    : 'Enter your PChat credentials.'}
+                    : 'Enter your Plexa credentials.'}
                 </Text>
 
                 {mode === 'register' ? (
@@ -173,7 +173,16 @@ export default function AuthScreen() {
             ) : null}
 
             <View style={styles.footer}>
-              <Text style={styles.footerTxt}>By continuing, you agree to PChat community guidelines.</Text>
+              <Text style={styles.footerTxt}>By continuing, you agree to Plexa community guidelines.</Text>
+              <View style={styles.footerLinks}>
+                <TouchableOpacity onPress={() => router.push('/privacy')} testID="auth-privacy-link">
+                  <Text style={styles.footerLink}>Privacy Policy</Text>
+                </TouchableOpacity>
+                <Text style={styles.footerDot}> · </Text>
+                <TouchableOpacity onPress={() => router.push('/terms')} testID="auth-terms-link">
+                  <Text style={styles.footerLink}>Terms</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -220,4 +229,7 @@ const styles = StyleSheet.create({
   errText: { color: theme.colors.text, fontSize: 13, flex: 1 },
   footer: { marginTop: 24, alignItems: 'center' },
   footerTxt: { color: theme.colors.textMuted, fontSize: 11, textAlign: 'center' },
+  footerLinks: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  footerLink: { color: theme.colors.textDim, fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
+  footerDot: { color: theme.colors.textMuted, fontSize: 12 },
 });

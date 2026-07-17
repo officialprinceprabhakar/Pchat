@@ -280,7 +280,7 @@ export default function RoomScreen() {
   };
   const doNativeShare = async () => {
     try {
-      await Share.share({ message: `Join me on PChat in "${room.name}": ${inviteLink}` });
+      await Share.share({ message: `Join me on Plexa in "${room.name}": ${inviteLink}` });
     } catch {}
   };
 

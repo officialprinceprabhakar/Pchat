@@ -1,0 +1,62 @@
+{
+  "summary": "Plexa (rebranded from PChat) end-to-end tested. Backend: 16 passed / 1 skipped (11 dev-dashboard regression, 6 new). Verified GET /api/ returns {ok:true, app:'Plexa'} and CORS OPTIONS on /api/rooms works. Delete-account cascade: register user1+user2, create room+2 messages+post+story, exchange friendship, POST /api/users/me/delete with password+confirm succeeds; old session returns 401 on /api/auth/me; dev endpoint shows user anonymized (display_name='Deleted user', username='deleted_<uid_prefix>', avatar/email/bio null, provider preserved), posts=0, friends=0, sessions=[]. Owned room with no other members is deleted (404). mod_logs contains action='account_deleted' entry with the deleted user_id, and /api/dev/users?query=deleted_ returns the anonymized user. Frontend: login screen shows 'Plexa' brand (no 'PChat' anywhere), exactly two buttons Login+New User (no Google button), footer Privacy/Terms links navigate to /privacy (contains 'Information We Collect' + support email) and /terms (contains 'Acceptable Use' and 'Governing Law'); browser back returns to login. Settings screen shows new 'LEGAL & SUPPORT' section with 3 rows (settings-privacy-policy, settings-terms, settings-support) and Danger Zone contains settings-delete-account which navigates to /delete-account (not a modal). Delete-account screen shows all 8 bullets (profile, posts, stories, images, sessions, friend relationships, notifications, database records). Delete button starts aria-disabled=true; after filling delete-password with 'testpass123', delete-confirm-text with 'DELETE', and clicking delete-ack, aria-disabled becomes null and bg color turns to primary red (enabled). /privacy-settings still resolves for the old privacy-settings screen. NOTE: We did NOT submit testuser1's deletion. Minor observation: (a) `POST /api/rooms/create` in the request does not exist — actual endpoint is `POST /api/rooms`; (b) `/api/dev/user/{uid}` response does not include a 'stories' count field (posts/friends/rooms/messages/sessions[] only) and does not surface the `deleted` boolean via _sanitize_user — anonymization is still verifiable via display_name/username/avatar/email.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/rooms/create",
+        "issue": "Route path in the request spec doesn't exist. Actual create endpoint is POST /api/rooms (405 Method Not Allowed on /rooms/create). Tests use the actual endpoint."
+      },
+      {
+        "endpoint": "GET /api/dev/user/{user_id}",
+        "issue": "Response omits 'stories' count (only friends, rooms, posts, messages, sessions[]). Also _sanitize_user strips the 'deleted' boolean flag so verifying 'deleted=true' via API is not possible; anonymization is still provable via display_name/username/avatar/email fields."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "shadow* style props",
+        "issue": "Web console still warns 'shadow*' style props are deprecated - use 'boxShadow'. Reference: multiple screens using shadowOffset/shadowOpacity/shadowRadius (already reported in iteration_1)."
+      },
+      {
+        "component": "expo-notifications on web",
+        "issue": "Warning '[expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.' Emitted at app boot on the web preview. Native-only feature — safe to guard the listener with Platform.OS !== 'web'."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_delete_cascade.py",
+    "/app/backend/tests/test_dev_dashboard.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/delete_cascade_results.xml"
+  ],
+  "action_items": [
+    "Optional: Update _sanitize_user (backend/server.py line 329) to include the 'deleted' flag so /api/dev/user/{uid} can expose it for auditing / UI badge purposes.",
+    "Optional: Add 'stories' count to GET /api/dev/user/{user_id} response (currently missing) so devs can inspect user stories volume.",
+    "Optional cleanup: guard the expo-notifications addPushTokenListener call with Platform.OS !== 'web' to remove boot-time warning.",
+    "Optional cleanup: migrate remaining 'shadow*' style props to 'boxShadow' (multiple screens).",
+    "Docs: correct request spec — room creation is POST /api/rooms, not POST /api/rooms/create."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2479 lines; delete_my_account cascade block (lines 2185-2262) is dense and would benefit from extraction to a helper (users_service.delete_user(uid, provider)) for readability + testability.",
+    "delete_my_account writes anonymized fields but does not scrub the 'password_hash' field explicitly for google users (already null) — for guest users password_hash is set to None which is correct. Verified.",
+    "Room transfer logic during account deletion promotes earliest room_member by joined_at regardless of prior role; consider preferring existing admins/mods over members for continuity.",
+    "delete_my_account cascade does NOT delete room_messages authored by the user (only messages in owned+empty rooms). Messages remain attributed via display_name update — intentional per privacy policy footer, but worth confirming with product."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_delete_cascade.py (created)"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 executed pytest passed; 1 defensive skip in force-change-password test since dev already migrated)",
+    "frontend": "100% of requested flows passed"
+  },
+  "seed_data_creation": "Backend tests create ephemeral guest users prefixed with del_test_* and del_friend_* (fully cascade-deleted at end of the test), plus TEST_tmp_* and TEST_guest_* users from the dev-dashboard suite. testuser1 was NOT deleted (only verified UI state). Prince_Prabhakar remains DevPass123!. PrincePrabhakar remains NewPwd1234. Reyansh remains ReyPwd12345.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run backend suite with `pytest /app/backend/tests/ -v`. Delete-cascade test lives at /app/backend/tests/test_delete_cascade.py and covers: rebrand, regression, and full delete flow. When writing new delete/cascade tests, remember: (a) actual create-room endpoint is POST /api/rooms (not /rooms/create), (b) /api/dev/user/{uid} does not expose stories count nor the 'deleted' flag, (c) BASE_URL comes from EXPO_PUBLIC_BACKEND_URL, (d) login response has 'session_token' key. Frontend delete-account testIDs: delete-password (guest only), delete-confirm-text, delete-ack, delete-submit. Settings testIDs: settings-privacy-policy, settings-terms, settings-support, settings-delete-account, settings-deactivate. Auth screen testIDs: auth-login-btn, auth-register-btn, auth-privacy-link, auth-terms-link, auth-username, auth-password, auth-submit. Announcement popup on /home requires 'Got it' dismissal before profile interactions."
+}

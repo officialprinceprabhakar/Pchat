@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -103,6 +103,14 @@ export default function SettingsScreen() {
     }
   };
 
+  const openSupportEmail = () => {
+    const subject = encodeURIComponent(`Plexa support request${user ? ` — @${user.username}` : ''}`);
+    const body = encodeURIComponent(`Hi Plexa team,\n\n[Please describe your issue below]\n\n---\nApp: Plexa v1.0\nUser ID: ${user?.user_id || 'not signed in'}\n`);
+    Linking.openURL(`mailto:officialprinceprabhakar@gmail.com?subject=${subject}&body=${body}`).catch(() => {
+      Alert.alert('Cannot open email', 'Please email officialprinceprabhakar@gmail.com');
+    });
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.colors.bg }} edges={['top', 'bottom']}>
       <ScreenHeader title="Settings" onBack={() => router.back()} />
@@ -159,7 +167,7 @@ export default function SettingsScreen() {
 
         {/* Privacy */}
         <Section t={t} title="PRIVACY & SAFETY">
-          <TouchableOpacity onPress={() => router.push('/privacy')} style={styles.card} testID="settings-privacy">
+          <TouchableOpacity onPress={() => router.push('/privacy-settings')} style={styles.card} testID="settings-privacy">
             <View style={styles.rowLine}>
               <MaterialCommunityIcons name="shield-lock" size={18} color={t.colors.text} />
               <Text style={styles.rowLbl}>Privacy settings</Text>
@@ -225,12 +233,40 @@ export default function SettingsScreen() {
               <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
             </View>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowDelete(true)} style={styles.card} testID="settings-delete-account">
+          <TouchableOpacity onPress={() => router.push('/delete-account')} style={styles.card} testID="settings-delete-account">
             <View style={styles.rowLine}>
               <MaterialCommunityIcons name="delete-forever" size={18} color={t.colors.primary} />
-              <Text style={[styles.rowLbl, { color: t.colors.primary }]}>Permanently delete account</Text>
+              <Text style={[styles.rowLbl, { color: t.colors.primary }]}>Delete account</Text>
               <View style={{ flex: 1 }} />
               <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
+            </View>
+          </TouchableOpacity>
+        </Section>
+
+        {/* Legal & Support */}
+        <Section t={t} title="LEGAL & SUPPORT">
+          <TouchableOpacity onPress={() => router.push('/privacy')} style={styles.card} testID="settings-privacy-policy">
+            <View style={styles.rowLine}>
+              <MaterialCommunityIcons name="shield-check" size={18} color={t.colors.text} />
+              <Text style={styles.rowLbl}>Privacy Policy</Text>
+              <View style={{ flex: 1 }} />
+              <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/terms')} style={styles.card} testID="settings-terms">
+            <View style={styles.rowLine}>
+              <MaterialCommunityIcons name="file-document" size={18} color={t.colors.text} />
+              <Text style={styles.rowLbl}>Terms & Conditions</Text>
+              <View style={{ flex: 1 }} />
+              <MaterialCommunityIcons name="chevron-right" size={18} color={t.colors.textDim} />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={openSupportEmail} style={styles.card} testID="settings-support">
+            <View style={styles.rowLine}>
+              <MaterialCommunityIcons name="lifebuoy" size={18} color={t.colors.text} />
+              <Text style={styles.rowLbl}>Contact Support</Text>
+              <View style={{ flex: 1 }} />
+              <MaterialCommunityIcons name="email-fast" size={18} color={t.colors.textDim} />
             </View>
           </TouchableOpacity>
         </Section>
@@ -240,7 +276,7 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <View style={styles.rowLine}>
               <MaterialCommunityIcons name="information" size={18} color={t.colors.text} />
-              <Text style={styles.rowLbl}>PChat v1.0</Text>
+              <Text style={styles.rowLbl}>Plexa v1.0</Text>
             </View>
           </View>
         </Section>
@@ -338,7 +374,7 @@ export default function SettingsScreen() {
               <TouchableOpacity onPress={() => setShowDelete(false)}><MaterialCommunityIcons name="close" size={22} color={t.colors.text} /></TouchableOpacity>
             </View>
             <Text style={{ color: t.colors.textDim, fontSize: 13, marginBottom: 12 }}>
-              This action is irreversible. Your profile, friends, and posts will be permanently removed. Your messages will remain visible but marked as sent by "Deleted user".
+              This action is irreversible. Your profile, friends, and posts will be permanently removed. Your messages will remain visible but marked as sent by &quot;Deleted user&quot;.
             </Text>
             {user?.provider === 'guest' ? (
               <TextInput
