@@ -141,28 +141,7 @@ const params = useLocalSearchParams();
                 <Text style={styles.cardTitle}>Sign in to continue</Text>
                 <Text style={styles.cardSub}>Choose how you want to enter PChat</Text>
 
-                <TouchableOpacity
-                  onPress={handleGoogle}
-                  disabled={googleBusy}
-                  activeOpacity={0.85}
-                  style={styles.googleBtn}
-                  testID="auth-google-btn"
-                >
-                  {googleBusy ? (
-                    <ActivityIndicator color="#000" />
-                  ) : (
-                    <>
-                      <View style={styles.gIcon}><Text style={{ color: '#1A73E8', fontWeight: '900', fontSize: 18 }}>G</Text></View>
-                      <Text style={styles.googleTxt}>Continue with Google</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerTxt}>OR</Text>
-                  <View style={styles.dividerLine} />
-                </View>
+                
 
                 <PButton
                   title="Guest Login"
