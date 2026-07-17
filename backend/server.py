@@ -707,7 +707,7 @@ async def list_friends(user: dict = Depends(get_user_by_session)):
     uid = user["user_id"]
     cursor = db.friendships.find(
         {"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}
-    )
+    ).limit(5000)
     friend_ids = []
     async for f in cursor:
         friend_ids.append(f["b"] if f["a"] == uid else f["a"])
@@ -1391,7 +1391,7 @@ async def list_posts(user: dict = Depends(get_user_by_session)):
     uid = user["user_id"]
     # friends set
     friend_ids = set()
-    async for f in db.friendships.find({"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}):
+    async for f in db.friendships.find({"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}).limit(5000):
         friend_ids.add(f["a"] if f["a"] != uid else f["b"])
     posts = []
     async for p in db.posts.find({}, {"_id": 0}).sort("created_at", -1).limit(100):
@@ -2268,7 +2268,7 @@ async def stories_feed(user: dict = Depends(get_user_by_session)):
     # Determine my friends
     uid = user["user_id"]
     friend_ids: set = set()
-    async for f in db.friendships.find({"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}):
+    async for f in db.friendships.find({"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}).limit(5000):
         friend_ids.add(f["a"] if f["a"] != uid else f["b"])
     # Fetch active stories
     grouped: dict = {}
@@ -2364,7 +2364,7 @@ async def room_members_enriched(room_id: str, user: dict = Depends(get_user_by_s
     uid = user["user_id"]
     # Preload viewer's friend ids for constant-time membership check
     friend_ids: set = set()
-    async for f in db.friendships.find({"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}):
+    async for f in db.friendships.find({"$or": [{"a": uid}, {"b": uid}]}, {"_id": 0}).limit(5000):
         friend_ids.add(f["a"] if f["a"] != uid else f["b"])
 
     def scope_allows(scope: str, target_uid: str) -> bool:
