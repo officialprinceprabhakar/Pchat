@@ -245,7 +245,12 @@ const styles = StyleSheet.create({
     position: 'absolute', top: -120, left: -80, width: 320, height: 320, borderRadius: 160,
     backgroundColor: theme.colors.primaryGlow, opacity: 0.6,
   },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 32, justifyContent: 'center' },
+  scroll: {
+  flexGrow: 1,
+  paddingHorizontal: 24,
+  paddingTop: 24,
+  paddingBottom: 20,
+},
   logoWrap: { alignItems: 'center', marginBottom: 32, marginTop: 24 },
   logo: {
     width: 74, height: 74, borderRadius: 22,
@@ -283,7 +288,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: theme.colors.primary,
   },
   errText: { color: theme.colors.text, fontSize: 13, flex: 1 },
-  footer: { marginTop: 24, alignItems: 'center' },
+  footer: {
+  marginTop: 'auto',
+  alignItems: 'center',
+  paddingBottom: 10,
+},
   footerTxt: { color: theme.colors.textMuted, fontSize: 11, textAlign: 'center' }, 
 devName: {
   marginTop: 12,
