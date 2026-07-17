@@ -128,6 +128,8 @@ export const api = {
   setNotifPrefs: (body: any) => apiFetch('/notifications/prefs', { method: 'POST', body }),
   listBlocks: () => apiFetch('/blocks'),
   changeUsername: (username: string) => apiFetch('/users/change-username', { method: 'POST', body: { username } }),
+  changePassword: (current_password: string | undefined, new_password: string) =>
+    apiFetch('/auth/change-password', { method: 'POST', body: { current_password, new_password } }),
   // Badges
   listBadges: () => apiFetch('/badges'),
   createBadge: (body: any) => apiFetch('/badges', { method: 'POST', body }),

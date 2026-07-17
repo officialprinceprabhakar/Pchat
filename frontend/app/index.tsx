@@ -29,7 +29,10 @@ export default function AuthScreen() {
   const [googleBusy, setGoogleBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) router.replace('/(tabs)/home');
+    if (!loading && user) {
+      if (user.must_change_password) router.replace('/change-password');
+      else router.replace('/(tabs)/home');
+    }
   }, [loading, user, router]);
 
   const handleGoogle = useCallback(async () => {

@@ -75,6 +75,7 @@ export default function RoomScreen() {
   const [showAnnouncement, setShowAnnouncement] = useState(false);
   const [announcementDraft, setAnnouncementDraft] = useState('');
   const [showShare, setShowShare] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [inviteQ, setInviteQ] = useState('');
   const [inviteResults, setInviteResults] = useState<any[]>([]);
   const [showScrollDown, setShowScrollDown] = useState(false);
@@ -325,6 +326,7 @@ export default function RoomScreen() {
   const isMember = !!membership?.role;
   const isOwner = membership?.role === 'owner' || user?.is_developer;
   const canAdmin = ['owner', 'admin'].includes(membership?.role || '') || user?.is_developer;
+  const canChangeWallpaper = ['owner', 'admin', 'moderator'].includes(membership?.role || '') || user?.is_developer;
 
   // Build compact message list w/ date separators + author grouping
   const items: any[] = [];
@@ -348,25 +350,18 @@ export default function RoomScreen() {
       ) : null}
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* ==== HEADER (no room code) ==== */}
+        {/* ==== HEADER (name only, no code, no typing, no counts) ==== */}
         <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()} style={s.hIconBtn} testID="room-back">
             <MaterialCommunityIcons name="chevron-left" size={26} color={t.colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setTab('members')}>
+          <View style={{ flex: 1 }}>
             <Text style={s.hTitle} numberOfLines={1}>{room.name}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-              <View style={s.onlineDot} />
-              <Text style={s.hSub} numberOfLines={1}>
-                {onlineCount} online · {room.member_count} members
-                {typingUsers.length > 0 ? ` · ${typingUsers.slice(0, 2).join(', ')} typing…` : ''}
-              </Text>
-            </View>
+          </View>
+          <TouchableOpacity onPress={() => setTab('members')} style={s.hIconBtn} testID="room-members-btn">
+            <MaterialCommunityIcons name="account-multiple" size={20} color={t.colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowShare(true)} style={s.hIconBtn} testID="room-share">
-            <MaterialCommunityIcons name="share-variant" size={20} color={t.colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setTab('info')} style={s.hIconBtn} testID="room-menu">
+          <TouchableOpacity onPress={() => setShowMenu(true)} style={s.hIconBtn} testID="room-menu">
             <MaterialCommunityIcons name="dots-vertical" size={20} color={t.colors.text} />
           </TouchableOpacity>
         </View>
@@ -548,47 +543,78 @@ export default function RoomScreen() {
           </KeyboardAvoidingView>
         )}
 
-        {tab === 'members' && (
-          <>
-            <View style={s.subHead}>
+        {tab === 'members' && (() => {
+          const activeSince = Date.now() - 120_000;
+          const isOnline = (m: any) => m.last_seen && new Date(m.last_seen).getTime() > activeSince;
+          const ROLE_ORDER = ['owner', 'admin', 'moderator', 'vip', 'verified', 'member', 'guest'];
+          const online = members.filter(isOnline).sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));
+          const offline = members.filter((m) => !isOnline(m)).sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));
+          const renderRow = (item: any) => {
+            const roleColor = ROLE_COLORS[item.role] || t.colors.text;
+            const dotColor = isOnline(item) ? t.colors.green : t.colors.textMuted;
+            return (
+              <TouchableOpacity
+                key={item.user_id}
+                onPress={() => { setTab('chat'); insertMentionAtCursor(item.username); }}
+                onLongPress={() => setUserSheet(item)}
+                style={s.memRow}
+                testID={`member-${item.username}`}
+              >
+                <View>
+                  <Avatar uri={item.avatar} name={item.display_name || item.username} size={36} />
+                  <View style={[s.memDot, { backgroundColor: dotColor, borderColor: t.colors.surface1 }]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[s.memName, { color: roleColor }]}>@{item.username}</Text>
+                    {item.role !== 'member' ? (
+                      <View style={[s.roleTag, { borderColor: roleColor, backgroundColor: roleColor + '22' }]}>
+                        <Text style={[s.roleTagTxt, { color: roleColor }]}>{item.role.toUpperCase()}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={s.memSub} numberOfLines={1}>{item.display_name || item.username}</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={16} color={t.colors.textDim} />
+              </TouchableOpacity>
+            );
+          };
+          const grouped = (list: any[]) => {
+            const groups: Record<string, any[]> = {};
+            list.forEach((m) => { (groups[m.role] = groups[m.role] || []).push(m); });
+            return ROLE_ORDER.filter((r) => groups[r]?.length).map((r) => ({ role: r, items: groups[r] }));
+          };
+          return (
+            <ScrollView contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 40 }}>
               <TouchableOpacity onPress={() => setTab('chat')} style={s.subBack} testID="members-back">
                 <MaterialCommunityIcons name="chevron-left" size={20} color={t.colors.text} />
                 <Text style={s.subBackTxt}>Back to chat</Text>
               </TouchableOpacity>
-              <Text style={s.subTxt}>{members.length} members · {onlineCount} online</Text>
-            </View>
-            <FlatList
-              data={members}
-              keyExtractor={(m) => m.user_id}
-              contentContainerStyle={{ padding: 12, gap: 6 }}
-              renderItem={({ item }) => {
-                const roleColor = ROLE_COLORS[item.role] || t.colors.text;
-                return (
-                  <TouchableOpacity
-                    onPress={() => { setTab('chat'); insertMentionAtCursor(item.username); }}
-                    onLongPress={() => setUserSheet(item)}
-                    style={s.memRow}
-                    testID={`member-${item.username}`}
-                  >
-                    <Avatar uri={item.avatar} name={item.display_name || item.username} size={36} />
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[s.memName, { color: roleColor }]}>@{item.username}</Text>
-                        {item.role !== 'member' ? (
-                          <View style={[s.roleTag, { borderColor: roleColor, backgroundColor: roleColor + '22' }]}>
-                            <Text style={[s.roleTagTxt, { color: roleColor }]}>{item.role.toUpperCase()}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Text style={s.memSub} numberOfLines={1}>{item.display_name || item.username}</Text>
+              {online.length > 0 && (
+                <View>
+                  <Text style={s.memSection}>ONLINE · {online.length}</Text>
+                  {grouped(online).map((g) => (
+                    <View key={g.role} style={{ marginTop: 6 }}>
+                      <Text style={s.memRoleLbl}>{g.role.toUpperCase()}</Text>
+                      <View style={{ gap: 6 }}>{g.items.map(renderRow)}</View>
                     </View>
-                    <MaterialCommunityIcons name="chevron-right" size={16} color={t.colors.textDim} />
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </>
-        )}
+                  ))}
+                </View>
+              )}
+              {offline.length > 0 && (
+                <View>
+                  <Text style={s.memSection}>OFFLINE · {offline.length}</Text>
+                  {grouped(offline).map((g) => (
+                    <View key={g.role} style={{ marginTop: 6 }}>
+                      <Text style={s.memRoleLbl}>{g.role.toUpperCase()}</Text>
+                      <View style={{ gap: 6 }}>{g.items.map(renderRow)}</View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          );
+        })()}
 
         {tab === 'info' && (
           <ScrollView contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}>
@@ -613,12 +639,14 @@ export default function RoomScreen() {
               </TouchableOpacity>
             ) : null}
 
-            {canAdmin ? (
+            {canChangeWallpaper ? (
               <>
-                <TouchableOpacity onPress={() => { setAnnouncementDraft(room.announcement || ''); setShowAnnouncement(true); }} style={s.adminBtn} testID="room-set-announcement">
-                  <MaterialCommunityIcons name="bullhorn" size={18} color={t.colors.orange} />
-                  <Text style={s.adminBtnTxt}>Set announcement</Text>
-                </TouchableOpacity>
+                {canAdmin ? (
+                  <TouchableOpacity onPress={() => { setAnnouncementDraft(room.announcement || ''); setShowAnnouncement(true); }} style={s.adminBtn} testID="room-set-announcement">
+                    <MaterialCommunityIcons name="bullhorn" size={18} color={t.colors.orange} />
+                    <Text style={s.adminBtnTxt}>Set announcement</Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity onPress={() => setShowWallpaperSheet(true)} style={s.adminBtn} testID="room-change-wallpaper">
                   <MaterialCommunityIcons name="wallpaper" size={18} color={t.colors.blue} />
                   <Text style={s.adminBtnTxt}>Change wallpaper</Text>
@@ -668,6 +696,35 @@ export default function RoomScreen() {
           </ScrollView>
         )}
 
+        {/* Three-dot menu bottom sheet */}
+        <Modal visible={showMenu} transparent animationType="slide" onRequestClose={() => setShowMenu(false)}>
+          <Pressable style={s.sheetWrap} onPress={() => setShowMenu(false)}>
+            <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+              <Text style={s.modalTitle}>{room.name}</Text>
+              <SheetAction icon="share-variant" label="Share Room" onPress={() => { setShowMenu(false); setShowShare(true); }} t={t} />
+              <SheetAction icon="information-outline" label="About Room" onPress={() => { setShowMenu(false); setTab('info'); }} t={t} />
+              {canChangeWallpaper ? (
+                <SheetAction icon="wallpaper" label="Change Wallpaper" onPress={() => { setShowMenu(false); setShowWallpaperSheet(true); }} t={t} />
+              ) : null}
+              {isMember && membership.role !== 'owner' ? (
+                <SheetAction
+                  icon="exit-run"
+                  label="Leave Room"
+                  onPress={async () => { setShowMenu(false); await api.leaveRoom(roomId); router.back(); }}
+                  t={t}
+                  danger
+                />
+              ) : null}
+              <SheetAction
+                icon="flag-outline"
+                label="Report Room"
+                onPress={async () => { setShowMenu(false); await api.report(roomId, 'room', 'inappropriate'); Alert.alert('Reported'); }}
+                t={t}
+              />
+            </Pressable>
+          </Pressable>
+        </Modal>
+
         {/* Long-press message → context menu */}
         <Modal visible={!!contextMsg} transparent animationType="fade" onRequestClose={() => setContextMsg(null)}>
           <Pressable style={s.sheetWrap} onPress={() => setContextMsg(null)}>
@@ -707,9 +764,11 @@ export default function RoomScreen() {
                     <Text style={[s.msName, { color: ROLE_COLORS[userSheet.role] || t.colors.text }]}>@{userSheet.username || userSheet.from_username}</Text>
                   </View>
                   <SheetAction icon="account" label="View Profile" onPress={() => { setUserSheet(null); router.push(`/user/${userSheet.user_id || userSheet.from_id}`); }} t={t} />
-                  <SheetAction icon="account-plus" label="Add Friend" onPress={async () => { try { await api.sendRequest(userSheet.user_id || userSheet.from_id); Alert.alert('Sent', 'Friend request sent'); } catch (e: any) { Alert.alert('Failed', e.message || 'try again'); } setUserSheet(null); }} t={t} />
-                  <SheetAction icon="block-helper" label="Block User" onPress={async () => { await api.block(userSheet.user_id || userSheet.from_id); Alert.alert('Blocked', 'User has been blocked'); setUserSheet(null); }} t={t} danger />
-                  <SheetAction icon="flag-outline" label="Report User" onPress={async () => { await api.report(userSheet.user_id || userSheet.from_id, 'user', 'inappropriate'); Alert.alert('Reported'); setUserSheet(null); }} t={t} />
+                  <SheetAction icon="account-plus" label="Send Friend Request" onPress={async () => { try { await api.sendRequest(userSheet.user_id || userSheet.from_id); Alert.alert('Sent', 'Friend request sent'); } catch (e: any) { Alert.alert('Failed', e.message || 'try again'); } setUserSheet(null); }} t={t} />
+                  <SheetAction icon="chat" label="Send Message" onPress={() => { setUserSheet(null); router.push(`/chat/${userSheet.user_id || userSheet.from_id}`); }} t={t} />
+                  <SheetAction icon="content-copy" label="Copy Username" onPress={async () => { await Clipboard.setStringAsync('@' + (userSheet.username || userSheet.from_username || '')); setUserSheet(null); Alert.alert('Copied'); }} t={t} />
+                  <SheetAction icon="block-helper" label="Block" onPress={async () => { await api.block(userSheet.user_id || userSheet.from_id); Alert.alert('Blocked', 'User has been blocked'); setUserSheet(null); }} t={t} danger />
+                  <SheetAction icon="flag-outline" label="Report" onPress={async () => { await api.report(userSheet.user_id || userSheet.from_id, 'user', 'inappropriate'); Alert.alert('Reported'); setUserSheet(null); }} t={t} />
                 </>
               ) : null}
             </Pressable>
@@ -1014,6 +1073,11 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10,
     backgroundColor: t.colors.surface1, borderRadius: t.radii.md, borderWidth: 1, borderColor: t.colors.border,
   },
+  memDot: {
+    position: 'absolute', right: -2, bottom: -2, width: 12, height: 12, borderRadius: 6, borderWidth: 2,
+  },
+  memSection: { color: t.colors.text, fontSize: 13, fontWeight: '800', letterSpacing: 0.5, marginBottom: 4 },
+  memRoleLbl: { color: t.colors.textDim, fontSize: 10, fontWeight: '800', letterSpacing: 0.5, marginBottom: 4 },
   memName: { fontWeight: '800', fontSize: 14 },
   memSub: { color: t.colors.textDim, fontSize: 12, marginTop: 2 },
   roleTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 100, borderWidth: 1 },

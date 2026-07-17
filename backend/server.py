@@ -212,6 +212,11 @@ class ChangeUsernameBody(BaseModel):
     username: str
 
 
+class ChangePasswordBody(BaseModel):
+    current_password: Optional[str] = None
+    new_password: str
+
+
 # ---------------- Auth helpers ----------------
 DEV_USERNAMES = {"Prince_Prabhakar", "PrincePrabhakar", "Reyansh"}
 
@@ -272,6 +277,7 @@ def _sanitize_user(u: dict) -> dict:
         "badges": u.get("badges", []),
         "last_seen": (u.get("last_seen").isoformat() if isinstance(u.get("last_seen"), datetime) else u.get("last_seen")),
         "created_at": (u.get("created_at").isoformat() if isinstance(u.get("created_at"), datetime) else u.get("created_at")),
+        "must_change_password": bool(u.get("must_change_password")),
     }
 
 
@@ -356,7 +362,7 @@ async def startup():
         existing = await db.users.find_one({"username": uname})
         if not existing:
             uid = new_id("u")
-            pw_hash = bcrypt.hashpw(b"pchat_dev_2026", bcrypt.gensalt()).decode()
+            pw_hash = bcrypt.hashpw(b"PRin09#@", bcrypt.gensalt()).decode()
             await db.users.insert_one({
                 "user_id": uid,
                 "username": uname,
@@ -371,12 +377,12 @@ async def startup():
                 "posts_count": 0,
                 "rooms_created": 0,
                 "badges": ["developer"],
+                "must_change_password": True,
                 "created_at": now_utc(),
                 "last_seen": now_utc(),
             })
             log.info(f"Seeded dev account: {uname}")
         else:
-            # ensure dev flag + developer badge
             badges = set(existing.get("badges") or [])
             badges.add("developer")
             await db.users.update_one(
@@ -1675,6 +1681,27 @@ async def change_username(body: ChangeUsernameBody, user: dict = Depends(get_use
     return {"ok": True}
 
 
+@api.post("/auth/change-password")
+async def change_password(body: ChangePasswordBody, user: dict = Depends(get_user_by_session)):
+    if user.get("provider") != "guest":
+        raise HTTPException(400, "password only applies to guest accounts")
+    if len(body.new_password) < 6:
+        raise HTTPException(400, "password must be 6+ chars")
+    must_change = bool(user.get("must_change_password"))
+    # if not forced, require current password
+    if not must_change:
+        if not body.current_password or not user.get("password_hash"):
+            raise HTTPException(400, "current password required")
+        if not bcrypt.checkpw(body.current_password.encode(), user["password_hash"].encode()):
+            raise HTTPException(401, "current password incorrect")
+    new_hash = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": new_hash, "must_change_password": False}},
+    )
+    return {"ok": True}
+
+
 @api.get("/dev/user/{user_id}")
 async def dev_user_detail(user_id: str, user: dict = Depends(require_dev)):
     u = await db.users.find_one({"user_id": user_id}, {"_id": 0})
@@ -1773,3 +1800,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+
+       
