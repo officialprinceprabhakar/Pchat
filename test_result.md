@@ -101,3 +101,141 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  PChat is a premium Android social chat app with Y99-inspired room UI. This session:
+  1) Fix the frontend crash (previous session showed timeout on tab-home).
+  2) Verify existing UI polish: cleaned room header (3-dot menu), grouped members by role, change-password flow for seeded devs.
+  3) Build a complete hidden Developer Dashboard with:
+     - Overview stats (users, rooms, messages, posts, reports, banned users)
+     - Growth analytics (24h/7d)
+     - User management (search, ban/unban, force logout, reset password, delete, badges)
+     - Reports queue
+     - Badges CRUD
+     - Feature toggles (posts, voice notes, room creation, guest signup, Google auth, friends, DM, profanity filter)
+     - Global announcements popup (severity: info/warning/critical, TTL, dismissible per user)
+     - Mod logs
+  4) Change password flow enforced for seeded developer accounts: Prince_Prabhakar, PrincePrabhakar, Reyansh.
+
+backend:
+  - task: "Force change-password flow for seeded developers"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Seed logic sets must_change_password=True. Login returns user.must_change_password=true. change-password endpoint allows omitting current_password when must_change=true, then clears the flag."
+
+  - task: "Dev feature flags GET/POST"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added /api/features (any user), /api/dev/features (dev), /api/dev/features POST with 8 known keys and default fallback."
+
+  - task: "Global announcement CRUD + active + dismiss"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added POST /api/dev/announcements (creates ann + broadcasts notifications+push), GET /api/dev/announcements, POST /api/dev/announcements/{id}/deactivate, GET /api/announcements/active (per-user, honors dismissed_by), POST /api/announcements/{id}/dismiss."
+
+  - task: "Dev user actions: force-logout, reset-password"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "POST /api/dev/user/{user_id}/logout-all deletes all sessions. POST /api/dev/user/{user_id}/reset-password sets temp PRin09#@ and must_change_password=True. Both logged to mod_logs."
+
+frontend:
+  - task: "Fix frontend load crash on tab-home"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(tabs)/_layout.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Removed stale Tabs.Screen name='discover' (no file existed). Added defensive redirect to /change-password if user.must_change_password. Verified via screenshot; testuser1 lands on Home and Prince_Prabhakar lands on Change-Password."
+
+  - task: "Enhanced Developer Dashboard"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/dev/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Rebuilt with 7 sections (Overview, Users, Reports, Badges, Toggles, Announce, Mod Logs). Uses horizontal ScrollView tabs. Overview surfaces both devStats and devAnalytics. User modal shows friends/rooms/posts/messages/sessions and supports ban, force-logout, reset-password, delete, badge assign/remove."
+
+  - task: "Global Announcement popup"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/components/AnnouncementPopup.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Popup fetches /api/announcements/active on mount + every 60s. Severity-styled icon (info/warning/critical). Optional action_url button. Dismiss calls backend and hides. Rendered inside (tabs) layout so any logged-in user sees it."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Force change-password flow for seeded developers"
+    - "Dev feature flags GET/POST"
+    - "Global announcement CRUD + active + dismiss"
+    - "Dev user actions: force-logout, reset-password"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Session complete. Fixed the frontend crash (stale Tabs.Screen name=discover) and defensive change-password redirect in tabs layout. Extended backend with feature flags, announcements CRUD, force-logout, reset-password. Rebuilt Dev Dashboard as a 7-section experience with per-user modal actions. Added AnnouncementPopup that any logged-in user sees automatically.
+
+      Please test:
+      1) POST /api/auth/guest/login for Prince_Prabhakar with PRin09#@ — expect user.must_change_password=true.
+      2) After change-password (no current_password when forced), /api/auth/me returns must_change_password=false.
+      3) GET /api/features (any user), /api/dev/features (dev only, 8 keys, default fallback), POST /api/dev/features toggling posts_enabled true/false.
+      4) POST /api/dev/announcements with title/message/severity. GET /api/announcements/active returns it. After POST /api/announcements/{id}/dismiss for a user, subsequent /active returns null.
+      5) POST /api/dev/user/{user_id}/logout-all deletes sessions (login another user first).
+      6) POST /api/dev/user/{user_id}/reset-password sets must_change_password=true and returns temp password.
+      7) UI: seeded dev login → forced /change-password → after set → lands on /home; dev can navigate Profile → dev crown → dashboard.
+      Non-dev users: GET /api/dev/* returns 403.
+
+      Seeded dev credentials:
+      - Prince_Prabhakar / DevPass123!  (already went through change-password during session verification)
+      - PrincePrabhakar / PRin09#@ (still must_change=true)
+      - Reyansh / PRin09#@ (still must_change=true)
+      Regular test user: testuser1 / testpass123

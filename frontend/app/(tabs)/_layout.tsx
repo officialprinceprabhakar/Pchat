@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { View, StyleSheet, Platform, TouchableOpacity, Text } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/context/ThemeContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { api } from '@/src/api/client';
-import { useRouter } from 'expo-router';
+import { AnnouncementPopup } from '@/src/components/AnnouncementPopup';
 
 async function registerPush(user_id: string) {
   if (Platform.OS === 'web') return;
@@ -59,6 +59,7 @@ export default function TabsLayout() {
 
   useEffect(() => {
     if (!loading && !user) router.replace('/');
+    else if (!loading && user?.must_change_password) router.replace('/change-password');
   }, [loading, user, router]);
 
   useEffect(() => {
@@ -69,6 +70,7 @@ export default function TabsLayout() {
 
   // slightly denser tab row for 6 items
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -119,8 +121,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="messages" />
       <Tabs.Screen name="notifications" />
       <Tabs.Screen name="profile" />
-      <Tabs.Screen name="discover" options={{ href: null }} />
     </Tabs>
+    <AnnouncementPopup />
+    </>
   );
 }
 

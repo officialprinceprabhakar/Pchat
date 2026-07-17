@@ -1,0 +1,57 @@
+{
+  "summary": "PChat backend + Developer Dashboard flow tested end-to-end. Backend: 11/11 pytest cases passed (force change-password for seeded devs, feature flags CRUD + 8 keys + unknown-flag guard, announcements lifecycle including per-user dismiss + fresh user visibility after deactivate, dev user actions force-logout/reset-password with temp-pwd + must_change flag, non-dev 403 on all /dev/* endpoints, regression on /rooms and /notifications). Frontend: verified auth screen, testuser1 lands on /home, Reyansh forced-change-password flow completes and lands on /home, Prince_Prabhakar has crown & non-dev testuser1 has no crown, /dev opens with all 7 tabs (Overview/Users/Reports/Badges/Toggles/Announce/Mod Logs), Overview stats visible, Toggles page renders 8 flag switches with correct keys, Announce form clears + Recent list shows prior announcements, Mod Logs shows feature_flag/force_logout/reset_password entries, AnnouncementPopup rendered on home tab for logged-in users. Credentials for PrincePrabhakar (now NewPwd1234) and Reyansh (now ReyPwd12345) were changed by tests and noted in /app/memory/test_credentials.md; Prince_Prabhakar remains DevPass123!.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/dev top tab bar",
+        "issues": [
+          "Horizontal ScrollView tabs. On 390px width only the first ~4 tabs are visible; users must scroll to reach Toggles/Announce/Mod Logs. Consider a subtle right-edge fade or a hint that the bar is horizontally scrollable."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "console warnings",
+        "issue": "'shadow*' style props are deprecated - use 'boxShadow'. Emitted repeatedly during app load. Reference: search project for shadowOffset/shadowColor/shadowOpacity/shadowRadius (multiple screens)."
+      },
+      {
+        "component": "console warnings",
+        "issue": "'props.pointerEvents is deprecated. Use style.pointerEvents.' Emitted from RN Web components (likely inside libraries or app code)."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_dev_dashboard.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking. Optional: rename dev tab section keys from 'flags'/'logs' to 'toggles'/'modlogs' so testIDs match the human labels (currently: dev-tab-flags = 'Toggles', dev-tab-logs = 'Mod Logs'). Not required.",
+    "Optional design: add horizontal scroll affordance on the /dev tab bar (right-edge fade) so devs know Toggles/Announce/Mod Logs are reachable by scrolling.",
+    "Optional cleanup: migrate 'shadow*' style props to 'boxShadow' and 'props.pointerEvents' to 'style.pointerEvents' to silence RN-Web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1964 lines - candidate to split into feature modules (auth.py, rooms.py, dev.py, announcements.py) for maintainability.",
+    "PRin09#@ temp password is hardcoded in /api/dev/user/{user_id}/reset-password. Acceptable as intentional dev bootstrap password, but consider moving to env var + rotating.",
+    "TestForceChangePassword test is destructive (one-shot per environment) — password mutates on every run. Test contains a skip path and self-heal via /dev/user/{uid}/reset-password if credentials drift, so subsequent runs are safe."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_dev_dashboard.py (created)",
+    "/app/backend/tests/conftest.py (created)",
+    "/app/memory/test_credentials.md (updated PrincePrabhakar → NewPwd1234, Reyansh → ReyPwd12345)"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 pytest passed)",
+    "frontend": "100% of requested flows passed"
+  },
+  "seed_data_creation": "During tests: created transient guest users prefixed with TEST_tmp_* and TEST_guest_*; created + deactivated announcements TEST_ann_* and TEST_UI_ann_zz. Toggled posts_enabled off then back to true (final state = true). Prince_Prabhakar password unchanged (DevPass123!). PrincePrabhakar now = NewPwd1234, Reyansh now = ReyPwd12345 (recorded in test_credentials.md).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend pytest suite lives at /app/backend/tests/test_dev_dashboard.py; run `pytest /app/backend/tests/ -v`. Test uses EXPO_PUBLIC_BACKEND_URL (or falls back to the preview domain) and login response returns 'session_token' (not 'token'). Dev section keys inside /app/frontend/app/dev/index.tsx are 'flags' and 'logs', not 'toggles'/'modlogs' — remember when writing UI selectors. Announcement popup covers the home screen with a 'Got it' button which must be dismissed before profile/logout interactions. All 3 seeded developer accounts remain functional; PrincePrabhakar and Reyansh have new passwords per test_credentials.md."
+}

@@ -186,6 +186,19 @@ class RegisterPushBody(BaseModel):
     device_token: str
 
 
+class FeatureFlagBody(BaseModel):
+    key: str
+    enabled: bool
+
+
+class AnnouncementBody(BaseModel):
+    title: str
+    message: str
+    severity: Optional[str] = "info"  # info | warning | critical
+    action_url: Optional[str] = None
+    ttl_hours: Optional[int] = 24  # popup shown until now+ttl_hours
+
+
 class RoomModBody(BaseModel):
     user_id: str
     reason: Optional[str] = ""
@@ -1788,6 +1801,149 @@ async def register_push(body: RegisterPushBody):
     except Exception as e:
         log.warning(f"push register non-blocking fail: {e}")
     return {"status": "registered"}
+
+
+# ---------------- Feature Flags & Global Announcements ----------------
+DEFAULT_FLAGS = {
+    "posts_enabled": True,
+    "voice_notes_enabled": True,
+    "room_creation_enabled": True,
+    "guest_registration_enabled": True,
+    "google_auth_enabled": True,
+    "friends_system_enabled": True,
+    "direct_messages_enabled": True,
+    "profanity_filter_enabled": False,
+}
+
+
+@api.get("/features")
+async def get_features(user: dict = Depends(get_user_by_session)):
+    """Public read-only feature flags (any logged-in user)."""
+    doc = await db.settings.find_one({"_id": "feature_flags"}) or {}
+    flags = dict(DEFAULT_FLAGS)
+    flags.update(doc.get("flags", {}))
+    return {"flags": flags}
+
+
+@api.get("/dev/features")
+async def dev_get_features(user: dict = Depends(require_dev)):
+    doc = await db.settings.find_one({"_id": "feature_flags"}) or {}
+    flags = dict(DEFAULT_FLAGS)
+    flags.update(doc.get("flags", {}))
+    return {"flags": flags, "defaults": DEFAULT_FLAGS}
+
+
+@api.post("/dev/features")
+async def dev_set_feature(body: FeatureFlagBody, user: dict = Depends(require_dev)):
+    if body.key not in DEFAULT_FLAGS:
+        raise HTTPException(400, "unknown flag")
+    await db.settings.update_one(
+        {"_id": "feature_flags"},
+        {"$set": {f"flags.{body.key}": bool(body.enabled)}},
+        upsert=True,
+    )
+    await _log_mod(user["user_id"], "feature_flag", {"key": body.key, "enabled": bool(body.enabled)})
+    return {"ok": True, "key": body.key, "enabled": bool(body.enabled)}
+
+
+@api.get("/announcements/active")
+async def get_active_announcement(user: dict = Depends(get_user_by_session)):
+    """Return the latest un-dismissed active announcement for the user, or null."""
+    now = now_utc()
+    ann = await db.announcements.find_one(
+        {"active": True, "expires_at": {"$gt": now}, "dismissed_by": {"$ne": user["user_id"]}},
+        {"_id": 0},
+        sort=[("created_at", -1)],
+    )
+    if ann and isinstance(ann.get("created_at"), datetime):
+        ann["created_at"] = ann["created_at"].isoformat()
+    if ann and isinstance(ann.get("expires_at"), datetime):
+        ann["expires_at"] = ann["expires_at"].isoformat()
+    return {"announcement": ann}
+
+
+@api.post("/announcements/{ann_id}/dismiss")
+async def dismiss_announcement(ann_id: str, user: dict = Depends(get_user_by_session)):
+    await db.announcements.update_one(
+        {"ann_id": ann_id},
+        {"$addToSet": {"dismissed_by": user["user_id"]}},
+    )
+    return {"ok": True}
+
+
+@api.get("/dev/announcements")
+async def dev_list_announcements(user: dict = Depends(require_dev)):
+    items = []
+    async for a in db.announcements.find({}, {"_id": 0}).sort("created_at", -1).limit(50):
+        if isinstance(a.get("created_at"), datetime):
+            a["created_at"] = a["created_at"].isoformat()
+        if isinstance(a.get("expires_at"), datetime):
+            a["expires_at"] = a["expires_at"].isoformat()
+        # don't leak the dismissed_by list (potentially huge)
+        a["dismissed_count"] = len(a.get("dismissed_by") or [])
+        a.pop("dismissed_by", None)
+        items.append(a)
+    return {"announcements": items}
+
+
+@api.post("/dev/announcements")
+async def dev_create_announcement(body: AnnouncementBody, user: dict = Depends(require_dev)):
+    ann_id = new_id("ann")
+    ttl = max(1, min(720, int(body.ttl_hours or 24)))
+    doc = {
+        "ann_id": ann_id,
+        "title": body.title.strip()[:120],
+        "message": body.message.strip()[:600],
+        "severity": body.severity if body.severity in ("info", "warning", "critical") else "info",
+        "action_url": body.action_url,
+        "created_at": now_utc(),
+        "expires_at": now_utc() + timedelta(hours=ttl),
+        "active": True,
+        "created_by": user["user_id"],
+        "dismissed_by": [],
+    }
+    await db.announcements.insert_one(doc)
+    # Also broadcast via notifications for persistence
+    all_ids = [u["user_id"] async for u in db.users.find({}, {"_id": 0, "user_id": 1})]
+    for uid in all_ids:
+        await _add_notification(uid, "announcement", body.message, {"title": body.title, "ann_id": ann_id})
+    # push
+    for i in range(0, len(all_ids), 100):
+        await _push_notify(all_ids[i:i+100], body.title, body.message, action_url=body.action_url)
+    return {"ok": True, "ann_id": ann_id, "recipients": len(all_ids)}
+
+
+@api.post("/dev/announcements/{ann_id}/deactivate")
+async def dev_deactivate_announcement(ann_id: str, user: dict = Depends(require_dev)):
+    r = await db.announcements.update_one({"ann_id": ann_id}, {"$set": {"active": False}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "not found")
+    return {"ok": True}
+
+
+@api.post("/dev/user/{user_id}/logout-all")
+async def dev_logout_all(user_id: str, user: dict = Depends(require_dev)):
+    r = await db.user_sessions.delete_many({"user_id": user_id})
+    await _log_mod(user["user_id"], "force_logout", {"target": user_id, "sessions": r.deleted_count})
+    return {"ok": True, "sessions_removed": r.deleted_count}
+
+
+@api.post("/dev/user/{user_id}/reset-password")
+async def dev_reset_password(user_id: str, user: dict = Depends(require_dev)):
+    """Reset target user to initial dev password and force change on next login."""
+    target = await db.users.find_one({"user_id": user_id})
+    if not target:
+        raise HTTPException(404, "not found")
+    if target.get("provider") != "guest":
+        raise HTTPException(400, "reset only available for guest accounts")
+    ph = bcrypt.hashpw(b"PRin09#@", bcrypt.gensalt()).decode()
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"password_hash": ph, "must_change_password": True}},
+    )
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await _log_mod(user["user_id"], "reset_password", {"target": user_id})
+    return {"ok": True, "temp_password": "PRin09#@"}
 
 
 # ---------------- Mount router ----------------

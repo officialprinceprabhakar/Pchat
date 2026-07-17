@@ -155,6 +155,25 @@ export const api = {
     apiFetch('/dev/broadcast', { method: 'POST', body: { title, message } }),
   devMaintenance: (enabled: boolean) => apiFetch('/dev/maintenance', { method: 'POST', body: { enabled } }),
   devSettings: () => apiFetch('/dev/settings'),
+  // Feature flags
+  getFeatures: () => apiFetch('/features'),
+  devGetFeatures: () => apiFetch('/dev/features'),
+  devSetFeature: (key: string, enabled: boolean) =>
+    apiFetch('/dev/features', { method: 'POST', body: { key, enabled } }),
+  // Announcements
+  activeAnnouncement: () => apiFetch('/announcements/active'),
+  dismissAnnouncement: (ann_id: string) =>
+    apiFetch(`/announcements/${ann_id}/dismiss`, { method: 'POST' }),
+  devListAnnouncements: () => apiFetch('/dev/announcements'),
+  devCreateAnnouncement: (body: { title: string; message: string; severity?: string; action_url?: string; ttl_hours?: number }) =>
+    apiFetch('/dev/announcements', { method: 'POST', body }),
+  devDeactivateAnnouncement: (ann_id: string) =>
+    apiFetch(`/dev/announcements/${ann_id}/deactivate`, { method: 'POST' }),
+  // Dev user actions
+  devLogoutAll: (user_id: string) =>
+    apiFetch(`/dev/user/${user_id}/logout-all`, { method: 'POST' }),
+  devResetPassword: (user_id: string) =>
+    apiFetch(`/dev/user/${user_id}/reset-password`, { method: 'POST' }),
   // Push
   registerPush: (user_id: string, platform: string, device_token: string) =>
     apiFetch('/register-push', { method: 'POST', body: { user_id, platform, device_token }, auth: false }),

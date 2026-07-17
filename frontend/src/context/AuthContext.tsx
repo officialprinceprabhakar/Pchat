@@ -15,6 +15,8 @@ export type PChatUser = {
   posts_count?: number;
   rooms_created?: number;
   badges?: string[];
+  must_change_password?: boolean;
+  banned?: boolean;
 };
 
 type Ctx = {
