@@ -2417,10 +2417,13 @@ async def _are_friends(a_id: str, b_id: str) -> bool:
 # ---------------- Mount router ----------------
 app.include_router(api)
 
+# CORS: comma-separated list via CORS_ORIGINS env var, default to "*".
+_cors_env = os.environ.get("CORS_ORIGINS", "*").strip()
+_cors_origins = [o.strip() for o in _cors_env.split(",")] if _cors_env else ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
