@@ -183,6 +183,9 @@ export default function AuthScreen() {
                   <Text style={styles.footerLink}>Terms</Text>
                 </TouchableOpacity>
               </View>
+<Text style={styles.copyright}>
+  © 2026 Prince Prabhakar. All Rights Reserved.
+</Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -232,4 +235,10 @@ const styles = StyleSheet.create({
   footerLinks: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   footerLink: { color: theme.colors.textDim, fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
   footerDot: { color: theme.colors.textMuted, fontSize: 12 },
+copyright: {
+  color: theme.colors.textMuted,
+  fontSize: 11,
+  textAlign: 'center',
+  marginTop: 12,
+},
 });
