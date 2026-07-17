@@ -97,7 +97,7 @@ export default function AuthScreen() {
                   fullWidth
                   onPress={() => setMode('login')}
                   icon={<MaterialCommunityIcons name="login" size={18} color={theme.colors.onPrimary} />}
-                  testID="auth-guest-login-btn"
+                  testID="auth-login-btn"
                 />
                 <View style={{ height: 12 }} />
                 <PButton
@@ -106,7 +106,7 @@ export default function AuthScreen() {
                   fullWidth
                   onPress={() => setMode('register')}
                   icon={<MaterialCommunityIcons name="account-plus-outline" size={18} color={theme.colors.text} />}
-                  testID="auth-guest-register-btn"
+                  testID="auth-register-btn"
                 />
               </View>
             ) : (
@@ -115,9 +115,13 @@ export default function AuthScreen() {
                   <MaterialCommunityIcons name="chevron-left" size={20} color={theme.colors.textDim} />
                   <Text style={styles.backTxt}>Back</Text>
                 </TouchableOpacity>
-                <Text style={styles.cardTitle}>{mode === 'register' ? 'Create account' : 'Login'}</Text>
+                <Text style={styles.cardTitle}>
+                  {mode === 'register' ? 'Create account' : 'Login'}
+                </Text>
                 <Text style={styles.cardSub}>
-                  {mode === 'register' ? 'Pick a username and password to get started.' : 'Enter your PChat credentials.'}
+                  {mode === 'register'
+                    ? 'Pick a username and password to get started.'
+                    : 'Enter your PChat credentials.'}
                 </Text>
 
                 {mode === 'register' ? (

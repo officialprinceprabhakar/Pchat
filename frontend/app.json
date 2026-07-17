@@ -26,7 +26,9 @@
       "package": "com.emergent.modernsocialchat.cbyj0k",
       "permissions": [
         "READ_MEDIA_IMAGES",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
@@ -52,6 +54,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "141ab178-db1b-48f3-a287-535916ad5c19"
+      }
     }
   }
 }
