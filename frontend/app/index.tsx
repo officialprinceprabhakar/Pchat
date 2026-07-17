@@ -5,8 +5,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -90,8 +88,8 @@ const params = useLocalSearchParams();
     setBusy(true);
     try {
       const res = mode === 'register'
-        ? await api.guestRegister(username.trim(), password, displayName.trim() || undefined)
-        : await api.guestLogin(username.trim(), password);
+        ? await api.Register(username.trim(), password, displayName.trim() || undefined)
+        : await api.Login(username.trim(), password);
       await setSession(res.session_token, res.user);
       router.replace('/(tabs)/home');
     } catch (e: any) {
@@ -144,21 +142,21 @@ const params = useLocalSearchParams();
                 
 
                 <PButton
-                  title="Guest Login"
+                  title="Login"
                   variant="ghost"
                   fullWidth
                   onPress={() => setMode('login')}
                   icon={<MaterialCommunityIcons name="account-circle-outline" size={18} color={theme.colors.text} />}
-                  testID="auth-guest-login-btn"
+                  testID="auth-login-btn"
                 />
                 <View style={{ height: 10 }} />
                 <PButton
-                  title="Create Guest Account"
+                  title="Register (New User)"
                   variant="outline"
                   fullWidth
                   onPress={() => setMode('register')}
                   icon={<MaterialCommunityIcons name="account-plus-outline" size={18} color={theme.colors.text} />}
-                  testID="auth-guest-register-btn"
+                  testID="auth-register-btn"
                 />
               </View>
             ) : (
@@ -167,9 +165,13 @@ const params = useLocalSearchParams();
                   <MaterialCommunityIcons name="chevron-left" size={20} color={theme.colors.textDim} />
                   <Text style={styles.backTxt}>Back</Text>
                 </TouchableOpacity>
-                <Text style={styles.cardTitle}>{mode === 'register' ? 'Create guest account' : 'Guest login'}</Text>
+                <Text style={styles.cardTitle}>
+  {mode === 'register' ? 'Register (New User)' : 'Login'}
+</Text>
                 <Text style={styles.cardSub}>
-                  {mode === 'register' ? 'No phone number needed' : 'Enter your credentials'}
+                  {mode === 'register'
+  ? 'Create your new PChat account'
+  : 'Enter your username and password'}
                 </Text>
 
                 {mode === 'register' ? (
