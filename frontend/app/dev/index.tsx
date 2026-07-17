@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { theme } from '@/src/theme';
 import { useAuth } from '@/src/context/AuthContext';
@@ -286,6 +287,13 @@ export default function DevDashboard() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+        <LinearGradient
+          colors={['rgba(10,10,12,0)', theme.colors.bg]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          pointerEvents="none"
+          style={styles.tabsFade}
+        />
       </View>
 
       {loading ? (
@@ -632,6 +640,10 @@ const styles = StyleSheet.create({
   maintTxt: { color: theme.colors.text, fontSize: 12, fontWeight: '700' },
   tabsWrap: {
     borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+    position: 'relative',
+  },
+  tabsFade: {
+    position: 'absolute', right: 0, top: 0, bottom: 1, width: 32,
   },
   tabs: {
     paddingHorizontal: 12, paddingVertical: 10, gap: 6, alignItems: 'center',
