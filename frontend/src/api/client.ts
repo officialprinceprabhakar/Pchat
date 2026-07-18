@@ -1,7 +1,7 @@
 // Central API client - reads session token from secure storage on every call.
 import { storage } from '@/src/utils/storage';
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const BASE = 'https://pchat-backend-production.up.railway.app';
 const TOKEN_KEY = 'pchat_session_token';
 
 export const TOKEN_STORAGE_KEY = TOKEN_KEY;
