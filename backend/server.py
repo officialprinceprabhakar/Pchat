@@ -805,7 +805,6 @@ def _pair_key(a: str, b: str) -> str:
     x, y = sorted([a, b])
     return f"{x}::{y}"
 
-
 @api.get("/chats")
 async def list_chats(user: dict = Depends(get_user_by_session)):
     uid = user["user_id"]
@@ -834,7 +833,9 @@ async def list_chats(user: dict = Depends(get_user_by_session)):
                 "has_image": bool(last.get("image")),
             },
         })
-    return {"chats": chats}@api.get("/chats/{other_id}/messages")
+    return {"chats": chats}
+
+@api.get("/chats/{other_id}/messages")
 async def get_chat_messages(
     other_id: str,
     limit: int = 30,
