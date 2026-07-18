@@ -835,12 +835,7 @@ async def list_chats(user: dict = Depends(get_user_by_session)):
             },
         })
     return {"chats": chats}
-@api.get("/chats/{other_id}/messages")
-async def get_chat_messages(other_id: str, user: dict = Depends(get_user_by_session)):
-    key = _pair_key(user["user_id"], other_id)
-    uid = user["user_id"]
-    msgs = []
-    async for m in db.messages @api.get("/chats/{other_id}/messages")
+ @api.get("/chats/{other_id}/messages")
 async def get_chat_messages(
     other_id: str,
     limit: int = 30,
