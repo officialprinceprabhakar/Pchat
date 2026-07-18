@@ -880,19 +880,8 @@ async def get_chat_messages(
 
     return {
         "messages": messages,
-        "has_more": len(messages) == limit
-    }:
-        if uid in (m.get("deleted_for") or []):
-            continue
-        if m.get("deleted_for_all"):
-            m["text"] = None
-            m["image"] = None
-        m["created_at"] = m["created_at"].isoformat() if isinstance(m.get("created_at"), datetime) else m.get("created_at")
-        if isinstance(m.get("edited_at"), datetime):
-            m["edited_at"] = m["edited_at"].isoformat()
-        msgs.append(m)
-    return {"messages": msgs}
-
+        "has_more": len(messages) ==limit
+}
 
 @api.post("/chats/{other_id}/messages")
 async def send_chat_message(other_id: str, body: MessageBody, user: dict = Depends(get_user_by_session)):
