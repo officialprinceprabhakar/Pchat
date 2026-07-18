@@ -835,14 +835,58 @@ async def list_chats(user: dict = Depends(get_user_by_session)):
             },
         })
     return {"chats": chats}
-
-
 @api.get("/chats/{other_id}/messages")
 async def get_chat_messages(other_id: str, user: dict = Depends(get_user_by_session)):
     key = _pair_key(user["user_id"], other_id)
     uid = user["user_id"]
     msgs = []
-    async for m in db.messages.find({"pair_key": key}, {"_id": 0}).sort("created_at", 1).limit(200):
+    async for m in db.messages @api.get("/chats/{other_id}/messages")
+async def get_chat_messages(
+    other_id: str,
+    limit: int = 30,
+    skip: int = 0,
+    user: dict = Depends(get_user_by_session)
+):
+    limit = min(limit, 50)  # maximum 50 messages
+
+    key = _pair_key(user["user_id"], other_id)
+    uid = user["user_id"]
+
+    cursor = (
+        db.messages.find(
+            {
+                "pair_key": key,
+                "deleted_for": {"$ne": uid}
+            },
+            {"_id": 0}
+        )
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+    )
+
+    messages = []
+
+    async for m in cursor:
+        if m.get("deleted_for_all"):
+            m["text"] = None
+            m["image"] = None
+            m["voice"] = None
+
+        if isinstance(m.get("created_at"), datetime):
+            m["created_at"] = m["created_at"].isoformat()
+
+        if isinstance(m.get("edited_at"), datetime):
+            m["edited_at"] = m["edited_at"].isoformat()
+
+        messages.append(m)
+
+    messages.reverse()  # oldest → newest
+
+    return {
+        "messages": messages,
+        "has_more": len(messages) == limit
+    }:
         if uid in (m.get("deleted_for") or []):
             continue
         if m.get("deleted_for_all"):
