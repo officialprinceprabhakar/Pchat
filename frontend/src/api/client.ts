@@ -2,6 +2,7 @@
 import { storage } from '@/src/utils/storage';
 
 const BASE = 'https://pchat-backend-production.up.railway.app';
+throw new Error("CLIENT TS LOADED");
 const TOKEN_KEY = 'pchat_session_token';
 
 export const TOKEN_STORAGE_KEY = TOKEN_KEY;
